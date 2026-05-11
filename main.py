@@ -39,17 +39,20 @@ def main():
     fig, ax = plt.subplots(figsize=(10, 8))
     track.plot_track(ax=ax)
     
+    # Lejanta yer açmak için x eksenini sağa doğru genişlet
+    x_min, x_max = ax.get_xlim()
+    ax.set_xlim(x_min, x_max + 35)
+    
     car_marker, = ax.plot([], [], 'ro', markersize=8, label='Araç (Car)')
     target_marker, = ax.plot([], [], 'gx', markersize=8, label='Hedef Nokta')
     trajectory_line, = ax.plot([], [], 'b-', linewidth=1.5, alpha=0.7, label='Geçmiş Yörünge')
     time_text = ax.text(0.02, 0.95, '', transform=ax.transAxes, fontsize=12, fontweight='bold')
     
-    # Lejantı grafiğin dışına, üst kısma taşıdık
-    ax.legend(loc='upper center', bbox_to_anchor=(0.5, 1.08), ncol=3, fancybox=True, shadow=True)
+    # Lejantı grafiğin içine, oluşturulan sağdaki boşluğa taşıdık
+    ax.legend(loc='center right', fancybox=True, shadow=True, fontsize=10)
     
-    # Başlığın lejant ile çakışmaması için aralık bırak
-    plt.title('Otonom Araç Yörünge Takibi (Pure Pursuit)', pad=35, fontweight='bold')
-    plt.subplots_adjust(top=0.85) # Üstten biraz boşluk bırak
+    plt.title('Otonom Araç Yörünge Takibi (Pure Pursuit)', pad=15, fontweight='bold')
+    plt.tight_layout()
     
     # Tur takibi için state
     state = {'last_closest_idx': 0, 'lap_completed': False}

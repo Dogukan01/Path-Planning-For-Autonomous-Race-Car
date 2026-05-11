@@ -74,9 +74,9 @@ class Track:
         # Merkez çizgi
         ax.plot(self.cx, self.cy, '--', color='gold', linewidth=2, label='Centerline')
         
-        # İç ve dış sınırlar
-        ax.plot(self.ix, self.iy, '-', color='black', linewidth=2, label='Inner Boundary')
-        ax.plot(self.ox, self.oy, '-', color='black', linewidth=2, label='Outer Boundary')
+        # İç ve dış sınırlar (Tek bir lejant ögesi olarak göstermek için sadece birine etiket veriyoruz)
+        ax.plot(self.ix, self.iy, '-', color='black', linewidth=2, label='Pist Sınırları (Boundaries)')
+        ax.plot(self.ox, self.oy, '-', color='black', linewidth=2)
         
         # Gerçekçi oranlar için eksenleri eşitliyoruz
         ax.set_aspect('equal')
