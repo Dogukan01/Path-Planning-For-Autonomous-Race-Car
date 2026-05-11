@@ -1,17 +1,16 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
+from matplotlib.widgets import Slider, Button
 
 from track import Track
 from car import Car
 from controller import PurePursuitController
+from analysis import plot_analysis
 
 # --- Simülasyon Parametreleri ---
 DT = 0.05           # Zaman adımı [s]
-MAX_TIME = 100.0    # Maksimum simülasyon süresi
-
-# --- Araç ve Kontrolcü Parametreleri ---
-L = 2.5   # Dingil mesafesi [m]
+L = 2.5             # Dingil mesafesi [m]
 
 def create_history_dict():
     return {
@@ -19,90 +18,140 @@ def create_history_dict():
         'cte': [], 'steer': [], 'v': [], 'ld': []
     }
 
-def main():
-    track = Track(track_width=6.0, num_points=500)
-    
-    start_x = track.cx[0]
-    start_y = track.cy[0]
-    dx = track.cx[1] - track.cx[0]
-    dy = track.cy[1] - track.cy[0]
-    start_theta = np.arctan2(dy, dx)
-    
-    # 1. Statik Senaryo Nesneleri (Sabit Hız, Sabit Ld)
-    car_s = Car(x=start_x, y=start_y, theta=start_theta, L=L)
-    controller_s = PurePursuitController(L=L, ld_min=6.0, ld_k=0.0) # ld her zaman 6.0 kalır
-    v_s_target = 10.0 # Sabit Hız
-    history_s = create_history_dict()
-    
-    # 2. Dinamik Senaryo Nesneleri (Değişken Hız, Hıza Bağlı Ld)
-    car_d = Car(x=start_x, y=start_y, theta=start_theta, L=L)
-    controller_d = PurePursuitController(L=L, ld_min=3.0, ld_k=0.5) # ld = 0.5*v + 3.0
-    history_d = create_history_dict()
-    
-    # Görselleştirme Kurulumu
-    fig, ax = plt.subplots(figsize=(10, 8))
-    track.plot_track(ax=ax)
-    
-    x_min, x_max = ax.get_xlim()
-    ax.set_xlim(x_min, x_max + 35)
-    
-    # Araçları temsil edecek Polygon (Dikdörtgen) objeleri
-    car_poly_s = plt.Polygon([[0,0]], closed=True, fill=True, color='red', alpha=0.7, label='Statik Araç')
-    car_poly_d = plt.Polygon([[0,0]], closed=True, fill=True, color='blue', alpha=0.7, label='Dinamik Araç')
-    ax.add_patch(car_poly_s)
-    ax.add_patch(car_poly_d)
-    
-    # Hedef noktalar ve yörüngeler
-    target_marker_s, = ax.plot([], [], 'rx', markersize=8)
-    target_marker_d, = ax.plot([], [], 'bx', markersize=8)
-    trajectory_line_s, = ax.plot([], [], 'r-', linewidth=1.0, alpha=0.5)
-    trajectory_line_d, = ax.plot([], [], 'b-', linewidth=1.0, alpha=0.5)
-    
-    time_text = ax.text(0.02, 0.95, '', transform=ax.transAxes, fontsize=11, fontweight='bold')
-    
-    ax.legend(loc='center right', fancybox=True, shadow=True, fontsize=10)
-    plt.title('Otonom Araç Yörünge Takibi: Statik vs Dinamik', pad=15, fontweight='bold')
-    plt.tight_layout()
-    
-    state = {
-        'last_closest_idx_s': 0, 'lap_completed_s': False,
-        'last_closest_idx_d': 0, 'lap_completed_d': False
-    }
-    
-    def init():
-        car_poly_s.set_xy([[0,0]])
-        car_poly_d.set_xy([[0,0]])
-        target_marker_s.set_data([], [])
-        target_marker_d.set_data([], [])
-        trajectory_line_s.set_data([], [])
-        trajectory_line_d.set_data([], [])
-        time_text.set_text('')
-        return car_poly_s, car_poly_d, target_marker_s, target_marker_d, trajectory_line_s, trajectory_line_d, time_text
+class SimulationApp:
+    def __init__(self):
+        self.track = Track(track_width=6.0, num_points=500)
+        
+        # Başlangıç konumu ve yönelimi
+        self.start_x = self.track.cx[0]
+        self.start_y = self.track.cy[0]
+        dx = self.track.cx[1] - self.track.cx[0]
+        dy = self.track.cy[1] - self.track.cy[0]
+        self.start_theta = np.arctan2(dy, dx)
+        
+        # Figür ve Eksenler
+        self.fig, self.ax = plt.subplots(figsize=(12, 9))
+        plt.subplots_adjust(bottom=0.3) # Alt tarafta UI için yer ayır
+        
+        # Görsel Öğelerin Kurulumu
+        self.track.plot_track(ax=self.ax)
+        x_min, x_max = self.ax.get_xlim()
+        self.ax.set_xlim(x_min, x_max + 35)
+        
+        self.car_poly_s = plt.Polygon([[0,0]], closed=True, fill=True, color='red', alpha=0.7, label='Statik Araç')
+        self.car_poly_d = plt.Polygon([[0,0]], closed=True, fill=True, color='blue', alpha=0.7, label='Dinamik Araç')
+        self.ax.add_patch(self.car_poly_s)
+        self.ax.add_patch(self.car_poly_d)
+        
+        self.target_marker_s, = self.ax.plot([], [], 'rx', markersize=8)
+        self.target_marker_d, = self.ax.plot([], [], 'bx', markersize=8)
+        self.trajectory_line_s, = self.ax.plot([], [], 'r-', linewidth=1.0, alpha=0.5)
+        self.trajectory_line_d, = self.ax.plot([], [], 'b-', linewidth=1.0, alpha=0.5)
+        
+        self.time_text = self.ax.text(0.02, 0.95, '', transform=self.ax.transAxes, fontsize=11, fontweight='bold')
+        self.ax.legend(loc='center right', fancybox=True, shadow=True, fontsize=10)
+        self.ax.set_title('Otonom Araç Yörünge Takibi: Statik vs Dinamik', pad=15, fontweight='bold')
+        
+        self.setup_ui()
+        self.reset_simulation()
+        
+        # Animasyonu Başlat
+        # cache_frame_data=False uyarısını kapatmak ve frames limitini kaldırmak için generator kullanmıyoruz
+        self.ani = animation.FuncAnimation(
+            self.fig, self.update, init_func=self.init_anim,
+            blit=True, interval=20, cache_frame_data=False
+        )
+        
+        plt.show()
 
-    def update_car(car, controller, history, v_actual, is_static, lap_completed_key, last_idx_key, frame):
-        if state[lap_completed_key]:
+    def setup_ui(self):
+        """Kullanıcı arayüzünü (Slider ve Butonlar) kurar."""
+        # Kaydırıcı (Slider) Konumları [left, bottom, width, height]
+        ax_speed = plt.axes([0.15, 0.15, 0.65, 0.03])
+        ax_ld = plt.axes([0.15, 0.1, 0.65, 0.03])
+        
+        self.slider_speed = Slider(ax_speed, 'Statik Hız [m/s]', 2.0, 25.0, valinit=10.0)
+        self.slider_ld = Slider(ax_ld, 'Statik Ld [m]', 2.0, 15.0, valinit=6.0)
+        
+        # Butonlar
+        ax_restart = plt.axes([0.15, 0.02, 0.15, 0.05])
+        ax_analysis = plt.axes([0.65, 0.02, 0.15, 0.05])
+        
+        self.btn_restart = Button(ax_restart, 'Yeniden Başlat', color='lightgoldenrodyellow', hovercolor='0.975')
+        self.btn_analysis = Button(ax_analysis, 'Analizi Göster', color='lightblue', hovercolor='0.975')
+        
+        self.btn_restart.on_clicked(self.on_restart_clicked)
+        self.btn_analysis.on_clicked(self.on_analysis_clicked)
+
+    def reset_simulation(self):
+        """Araçların konumunu ve geçmişini sıfırlar."""
+        self.frame_count = 0
+        
+        self.car_s = Car(x=self.start_x, y=self.start_y, theta=self.start_theta, L=L)
+        self.car_d = Car(x=self.start_x, y=self.start_y, theta=self.start_theta, L=L)
+        
+        # Statik Controller Slider değerlerini alır
+        init_v = self.slider_speed.val
+        init_ld = self.slider_ld.val
+        self.controller_s = PurePursuitController(L=L, ld_min=init_ld, ld_k=0.0)
+        self.controller_d = PurePursuitController(L=L, ld_min=3.0, ld_k=0.5)
+        
+        self.history_s = create_history_dict()
+        self.history_d = create_history_dict()
+        
+        self.state = {
+            'last_closest_idx_s': 0, 'lap_completed_s': False,
+            'last_closest_idx_d': 0, 'lap_completed_d': False
+        }
+        
+        self.init_anim()
+
+    def on_restart_clicked(self, event):
+        self.reset_simulation()
+
+    def on_analysis_clicked(self, event):
+        """Veri varsa plot_analysis'i çağırır."""
+        if len(self.history_s['t']) > 0:
+            plot_analysis(self.history_s, self.history_d)
+        else:
+            print("Henüz kaydedilmiş veri yok.")
+
+    def init_anim(self):
+        self.car_poly_s.set_xy([[0,0]])
+        self.car_poly_d.set_xy([[0,0]])
+        self.target_marker_s.set_data([], [])
+        self.target_marker_d.set_data([], [])
+        self.trajectory_line_s.set_data([], [])
+        self.trajectory_line_d.set_data([], [])
+        self.time_text.set_text('')
+        return (self.car_poly_s, self.car_poly_d, self.target_marker_s, 
+                self.target_marker_d, self.trajectory_line_s, self.trajectory_line_d, self.time_text)
+
+    def update_car(self, car, controller, history, v_actual, lap_completed_key, last_idx_key):
+        if self.state[lap_completed_key]:
             return None, None
             
-        target_idx, closest_idx = controller.search_target_index(car.x, car.y, track.cx, track.cy, v_actual)
-        target_x = track.cx[target_idx]
-        target_y = track.cy[target_idx]
+        target_idx, closest_idx = controller.search_target_index(car.x, car.y, self.track.cx, self.track.cy, v_actual)
+        target_x = self.track.cx[target_idx]
+        target_y = self.track.cy[target_idx]
         
-        if frame > 50 and state[last_idx_key] > track.num_points - 50 and closest_idx < 50:
-            state[lap_completed_key] = True
+        # Tur tamamlama kontrolü
+        if self.frame_count > 50 and self.state[last_idx_key] > self.track.num_points - 50 and closest_idx < 50:
+            self.state[lap_completed_key] = True
             
-        state[last_idx_key] = closest_idx
+        self.state[last_idx_key] = closest_idx
         
         delta = controller.get_steering_angle(car.x, car.y, car.theta, target_x, target_y)
         car.update(v=v_actual, delta=delta, dt=DT)
         
-        next_idx = (closest_idx + 1) % track.num_points
-        track_theta = np.arctan2(track.cy[next_idx] - track.cy[closest_idx],
-                                 track.cx[next_idx] - track.cx[closest_idx])
-        dx_c = car.x - track.cx[closest_idx]
-        dy_c = car.y - track.cy[closest_idx]
+        next_idx = (closest_idx + 1) % self.track.num_points
+        track_theta = np.arctan2(self.track.cy[next_idx] - self.track.cy[closest_idx],
+                                 self.track.cx[next_idx] - self.track.cx[closest_idx])
+        dx_c = car.x - self.track.cx[closest_idx]
+        dy_c = car.y - self.track.cy[closest_idx]
         cte = -dx_c * np.sin(track_theta) + dy_c * np.cos(track_theta)
         
-        history['t'].append(frame * DT)
+        history['t'].append(self.frame_count * DT)
         history['x'].append(car.x)
         history['y'].append(car.y)
         history['theta'].append(car.theta)
@@ -113,65 +162,53 @@ def main():
         
         return target_x, target_y
 
-    def update(frame):
-        t = frame * DT
+    def update(self, frame):
+        # Eğer her iki araç da turu tamamladıysa sadece ekranı tut (Yeni bir frame hesaplama)
+        if self.state['lap_completed_s'] and self.state['lap_completed_d']:
+            return (self.car_poly_s, self.car_poly_d, self.target_marker_s, 
+                    self.target_marker_d, self.trajectory_line_s, self.trajectory_line_d, self.time_text)
+            
+        t = self.frame_count * DT
         
-        if state['lap_completed_s'] and state['lap_completed_d']:
-            ani.event_source.stop()
-            return car_poly_s, car_poly_d, target_marker_s, target_marker_d, trajectory_line_s, trajectory_line_d, time_text
-            
-        if t > MAX_TIME:
-            ani.event_source.stop()
-            
-        # 1. Statik Aracı Güncelle
-        v_s = v_s_target
-        tx_s, ty_s = update_car(car_s, controller_s, history_s, v_s, True, 'lap_completed_s', 'last_closest_idx_s', frame)
+        # Statik aracın hızı ve Ld'si UI üzerinden HER ADIMDA okunur (Canlı değişiklik için)
+        v_s = self.slider_speed.val
+        self.controller_s.ld_min = self.slider_ld.val
         
-        # 2. Dinamik Aracı Güncelle
-        # Dinamik hız, hedef noktaya olan açıya göre belirleniyor
-        # Önce geçici bir hedef bulup hızı belirliyoruz
-        tmp_idx, _ = controller_d.search_target_index(car_d.x, car_d.y, track.cx, track.cy, 10.0)
-        v_d = controller_d.get_target_speed(car_d.x, car_d.y, car_d.theta, track.cx[tmp_idx], track.cy[tmp_idx])
-        tx_d, ty_d = update_car(car_d, controller_d, history_d, v_d, False, 'lap_completed_d', 'last_closest_idx_d', frame)
+        # Statik Aracı Güncelle
+        tx_s, ty_s = self.update_car(self.car_s, self.controller_s, self.history_s, v_s, 'lap_completed_s', 'last_closest_idx_s')
         
-        # Görsel objeleri güncelle
-        if not state['lap_completed_s']:
-            car_poly_s.set_xy(car_s.get_corners())
-            target_marker_s.set_data([tx_s], [ty_s])
-            trajectory_line_s.set_data(history_s['x'], history_s['y'])
+        # Dinamik Aracı Güncelle
+        tmp_idx, _ = self.controller_d.search_target_index(self.car_d.x, self.car_d.y, self.track.cx, self.track.cy, 10.0)
+        v_d = self.controller_d.get_target_speed(self.car_d.x, self.car_d.y, self.car_d.theta, self.track.cx[tmp_idx], self.track.cy[tmp_idx])
+        tx_d, ty_d = self.update_car(self.car_d, self.controller_d, self.history_d, v_d, 'lap_completed_d', 'last_closest_idx_d')
+        
+        # Çizimleri Uygula
+        if not self.state['lap_completed_s']:
+            self.car_poly_s.set_xy(self.car_s.get_corners())
+            self.target_marker_s.set_data([tx_s], [ty_s])
+            self.trajectory_line_s.set_data(self.history_s['x'], self.history_s['y'])
             
-        if not state['lap_completed_d']:
-            car_poly_d.set_xy(car_d.get_corners())
-            target_marker_d.set_data([tx_d], [ty_d])
-            trajectory_line_d.set_data(history_d['x'], history_d['y'])
+        if not self.state['lap_completed_d']:
+            self.car_poly_d.set_xy(self.car_d.get_corners())
+            self.target_marker_d.set_data([tx_d], [ty_d])
+            self.trajectory_line_d.set_data(self.history_d['x'], self.history_d['y'])
             
+        # Bilgi Metni
         status_text = f"Time: {t:.1f} s\n"
-        status_text += f"Statik - Hız: {v_s:.1f} m/s, Ld: {controller_s.current_ld:.1f} m"
-        if state['lap_completed_s']: status_text += " (BİTTİ)"
+        status_text += f"Statik - Hız: {v_s:.1f} m/s, Ld: {self.controller_s.current_ld:.1f} m"
+        if self.state['lap_completed_s']: status_text += " (BİTTİ)"
         status_text += "\n"
-        status_text += f"Dinamik - Hız: {v_d:.1f} m/s, Ld: {controller_d.current_ld:.1f} m"
-        if state['lap_completed_d']: status_text += " (BİTTİ)"
+        status_text += f"Dinamik - Hız: {v_d:.1f} m/s, Ld: {self.controller_d.current_ld:.1f} m"
+        if self.state['lap_completed_d']: status_text += " (BİTTİ)"
         
-        time_text.set_text(status_text)
+        self.time_text.set_text(status_text)
+        self.frame_count += 1
         
-        return car_poly_s, car_poly_d, target_marker_s, target_marker_d, trajectory_line_s, trajectory_line_d, time_text
-
-    ani = animation.FuncAnimation(
-        fig, update, frames=int(MAX_TIME / DT) + 1,
-        init_func=init, blit=True,
-        interval=20, repeat=False
-    )
-    
-    plt.show() 
-    return history_s, history_d
-
-from analysis import plot_analysis
+        return (self.car_poly_s, self.car_poly_d, self.target_marker_s, 
+                self.target_marker_d, self.trajectory_line_s, self.trajectory_line_d, self.time_text)
 
 if __name__ == '__main__':
-    print("Simülasyon başlatılıyor...")
-    print("Kırmızı Araç: Sabit Hız ve İleri Bakma Mesafesi")
-    print("Mavi Araç: Dinamik Hız ve İleri Bakma Mesafesi")
-    print("Her iki araç da turu tamamladığında animasyon duracaktır.")
-    history_s, history_d = main()
-    print("Simülasyon tamamlandı. Analiz grafikleri çizdiriliyor...")
-    plot_analysis(history_s, history_d)
+    print("Simülasyon UI Modunda başlatılıyor...")
+    print("Arayüzdeki (UI) kaydırıcıları kullanarak statik aracın hızını ve ileri bakma mesafesini anlık değiştirebilirsiniz.")
+    print("Analizi görmek için 'Analizi Göster' butonuna basmanız yeterlidir.")
+    app = SimulationApp()
