@@ -178,8 +178,14 @@ class SimulationApp:
         tx_s, ty_s = self.update_car(self.car_s, self.controller_s, self.history_s, v_s, 'lap_completed_s', 'last_closest_idx_s')
         
         # Dinamik Aracı Güncelle
-        tmp_idx, _ = self.controller_d.search_target_index(self.car_d.x, self.car_d.y, self.track.cx, self.track.cy, 10.0)
-        v_d = self.controller_d.get_target_speed(self.car_d.x, self.car_d.y, self.car_d.theta, self.track.cx[tmp_idx], self.track.cy[tmp_idx])
+        # Düzeltilmiş Kod:
+        # 1. Önceki adımdaki hedef noktasına göre yeni hızı hesapla (İlk adımda bir önceki tmp_idx varsayılan olarak closest_idx olabilir)
+        v_d = self.controller_d.get_target_speed(self.car_d.x, self.car_d.y, self.car_d.theta, self.track.cx[self.state['last_closest_idx_d']], self.track.cy[self.state['last_closest_idx_d']])
+
+        # 2. Hesaplanan bu dinamik hızı arama fonksiyonuna ver
+        tmp_idx, _ = self.controller_d.search_target_index(self.car_d.x, self.car_d.y, self.track.cx, self.track.cy, v_d)
+
+        # 3. Aracı güncelle
         tx_d, ty_d = self.update_car(self.car_d, self.controller_d, self.history_d, v_d, 'lap_completed_d', 'last_closest_idx_d')
         
         # Çizimleri Uygula
