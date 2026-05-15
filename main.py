@@ -48,7 +48,8 @@ class SimulationApp:
         self.trajectory_line_s, = self.ax.plot([], [], 'r-', linewidth=1.0, alpha=0.5)
         self.trajectory_line_d, = self.ax.plot([], [], 'b-', linewidth=1.0, alpha=0.5)
         
-        self.time_text = self.ax.text(0.02, 0.95, '', transform=self.ax.transAxes, fontsize=11, fontweight='bold')
+        self.time_text = self.ax.text(0.02, 0.95, '', transform=self.ax.transAxes, fontsize=11, fontweight='bold',
+                                      bbox=dict(facecolor='white', edgecolor='black', alpha=0.9, boxstyle='round,pad=0.5'))
         self.ax.legend(loc='center right', fancybox=True, shadow=True, fontsize=10)
         self.ax.set_title('Otonom Araç Yörünge Takibi: Statik vs Dinamik', pad=15, fontweight='bold')
         
@@ -108,6 +109,8 @@ class SimulationApp:
 
     def on_restart_clicked(self, event):
         self.reset_simulation()
+        if hasattr(self, 'ani') and self.ani.event_source:
+            self.ani.event_source.start()
 
     def on_analysis_clicked(self, event):
         """Veri varsa plot_analysis'i çağırır."""
@@ -165,6 +168,8 @@ class SimulationApp:
     def update(self, frame):
         # Eğer her iki araç da turu tamamladıysa sadece ekranı tut (Yeni bir frame hesaplama)
         if self.state['lap_completed_s'] and self.state['lap_completed_d']:
+            if hasattr(self, 'ani') and self.ani.event_source:
+                self.ani.event_source.stop()
             return (self.car_poly_s, self.car_poly_d, self.target_marker_s, 
                     self.target_marker_d, self.trajectory_line_s, self.trajectory_line_d, self.time_text)
             
@@ -178,14 +183,14 @@ class SimulationApp:
         tx_s, ty_s = self.update_car(self.car_s, self.controller_s, self.history_s, v_s, 'lap_completed_s', 'last_closest_idx_s')
         
         # Dinamik Aracı Güncelle
-        # Düzeltilmiş Kod:
-        # 1. Önceki adımdaki hedef noktasına göre yeni hızı hesapla (İlk adımda bir önceki tmp_idx varsayılan olarak closest_idx olabilir)
-        v_d = self.controller_d.get_target_speed(self.car_d.x, self.car_d.y, self.car_d.theta, self.track.cx[self.state['last_closest_idx_d']], self.track.cy[self.state['last_closest_idx_d']])
+        # 1. Önceki hız ile hedef noktasını bul (İlk adımda varsayılan hız 10.0 m/s)
+        prev_v_d = self.history_d['v'][-1] if len(self.history_d['v']) > 0 else 10.0
+        tmp_idx, _ = self.controller_d.search_target_index(self.car_d.x, self.car_d.y, self.track.cx, self.track.cy, prev_v_d)
+        
+        # 2. O noktaya olan açıya göre yeni hızı hesapla
+        v_d = self.controller_d.get_target_speed(self.car_d.x, self.car_d.y, self.car_d.theta, self.track.cx[tmp_idx], self.track.cy[tmp_idx])
 
-        # 2. Hesaplanan bu dinamik hızı arama fonksiyonuna ver
-        tmp_idx, _ = self.controller_d.search_target_index(self.car_d.x, self.car_d.y, self.track.cx, self.track.cy, v_d)
-
-        # 3. Aracı güncelle
+        # 3. Aracı güncelle (Bu sırada kendi search_target_index işlemini yeni hızla yapacak)
         tx_d, ty_d = self.update_car(self.car_d, self.controller_d, self.history_d, v_d, 'lap_completed_d', 'last_closest_idx_d')
         
         # Çizimleri Uygula
