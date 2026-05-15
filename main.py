@@ -110,8 +110,8 @@ class SimulationApp:
 
     def on_restart_clicked(self, event):
         self.reset_simulation()
-        if hasattr(self, 'ani') and self.ani.event_source:
-            self.ani.event_source.start()
+        if hasattr(self, 'ani'):
+            self.ani.resume()
 
     def on_analysis_clicked(self, event):
         """Veri varsa plot_analysis'i çağırır."""
@@ -169,8 +169,8 @@ class SimulationApp:
     def update(self, frame):
         # Eğer her iki araç da turu tamamladıysa sadece ekranı tut (Yeni bir frame hesaplama)
         if self.state['lap_completed_s'] and self.state['lap_completed_d']:
-            if hasattr(self, 'ani') and self.ani.event_source:
-                self.ani.event_source.stop()
+            if hasattr(self, 'ani'):
+                self.ani.pause()
             return (self.car_poly_s, self.car_poly_d, self.target_marker_s, 
                     self.target_marker_d, self.trajectory_line_s, self.trajectory_line_d, self.time_text)
             
