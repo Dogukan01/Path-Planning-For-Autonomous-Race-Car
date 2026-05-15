@@ -110,8 +110,6 @@ class SimulationApp:
 
     def on_restart_clicked(self, event):
         self.reset_simulation()
-        if hasattr(self, 'ani'):
-            self.ani.resume()
 
     def on_analysis_clicked(self, event):
         """Veri varsa plot_analysis'i çağırır."""
@@ -131,9 +129,22 @@ class SimulationApp:
         return (self.car_poly_s, self.car_poly_d, self.target_marker_s, 
                 self.target_marker_d, self.trajectory_line_s, self.trajectory_line_d, self.time_text)
 
-    def update_car(self, car, controller, history, v_actual, lap_completed_key, last_idx_key):
+    def update_car(self, car, controller, history, target_v, lap_completed_key, last_idx_key):
         if self.state[lap_completed_key]:
             return None, None
+            
+        # Gerçekçi ivmelenme/yavaşlama limitleri (m/s^2)
+        a_max = 5.0     
+        brake_max = 10.0 
+        
+        v_current = history['v'][-1] if len(history['v']) > 0 else target_v
+        
+        if target_v > v_current:
+            v_actual = min(v_current + a_max * DT, target_v)
+        elif target_v < v_current:
+            v_actual = max(v_current - brake_max * DT, target_v)
+        else:
+            v_actual = target_v
             
         target_idx, closest_idx = controller.search_target_index(car.x, car.y, self.track.cx, self.track.cy, v_actual)
         target_x = self.track.cx[target_idx]
@@ -169,8 +180,6 @@ class SimulationApp:
     def update(self, frame):
         # Eğer her iki araç da turu tamamladıysa sadece ekranı tut (Yeni bir frame hesaplama)
         if self.state['lap_completed_s'] and self.state['lap_completed_d']:
-            if hasattr(self, 'ani'):
-                self.ani.pause()
             return (self.car_poly_s, self.car_poly_d, self.target_marker_s, 
                     self.target_marker_d, self.trajectory_line_s, self.trajectory_line_d, self.time_text)
             
