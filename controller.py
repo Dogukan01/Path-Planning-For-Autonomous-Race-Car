@@ -4,16 +4,22 @@ class PurePursuitController:
     """
     Aracın yörüngeyi (merkez çizgisini) takip etmesini sağlayan Pure Pursuit algoritması.
     """
-    def __init__(self, L, ld_min=6.0, ld_k=0.0):
+    def __init__(self, L, ld_min=6.0, ld_k=0.0, v_max=15.0, v_min=5.0, k_v=15.0):
         """
         L: Dingil mesafesi (Wheelbase) [m] - Araç ile aynı olmalıdır
         ld_min: Minimum ileriye bakma mesafesi (Look-ahead distance) [m]
         ld_k: Hız-İleri bakma mesafesi kazancı (ld = k * v + ld_min)
+        v_max: Maksimum hedef hız [m/s]
+        v_min: Minimum hedef hız [m/s]
+        k_v: Hız düşürme katsayısı (Dönüşlerde hızı ne kadar keseceği)
         """
         self.L = L
         self.ld_min = ld_min
         self.ld_k = ld_k
         self.current_ld = ld_min
+        self.v_max = v_max
+        self.v_min = v_min
+        self.k_v = k_v
         
     def search_target_index(self, car_x, car_y, cx, cy, v):
         """
@@ -72,9 +78,5 @@ class PurePursuitController:
         alpha = target_angle - car_theta
         alpha = (alpha + np.pi) % (2 * np.pi) - np.pi
         
-        v_max = 15.0
-        v_min = 5.0
-        k_v = 15.0 # Hız düşürme katsayısı
-        
-        target_v = v_max - k_v * abs(alpha)
-        return np.clip(target_v, v_min, v_max)
+        target_v = self.v_max - self.k_v * abs(alpha)
+        return np.clip(target_v, self.v_min, self.v_max)

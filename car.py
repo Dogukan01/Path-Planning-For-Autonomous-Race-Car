@@ -23,13 +23,14 @@ class Car:
         self.width = width
         self.length = length
         
-    def get_corners(self):
+    def get_corners(self, visual_scale=1.0):
         """
         Aracın dikdörtgen modelini çizmek için dört köşesinin koordinatlarını hesaplar.
+        Görsel ölçekleme eklendi (F1 pistlerinde aracın çok küçük kalmasını engellemek için).
         """
-        front_length = self.length * 0.75
-        rear_length = self.length * 0.25
-        w = self.width / 2.0
+        front_length = self.length * 0.75 * visual_scale
+        rear_length = self.length * 0.25 * visual_scale
+        w = (self.width / 2.0) * visual_scale
         
         corners = np.array([
             [front_length, w],

@@ -20,6 +20,7 @@ def create_history_dict():
 
 class SimulationApp:
     def __init__(self):
+        self.visual_scale = 1.0
         self.track = Track(track_type='peanut', track_width=6.0, num_points=500)
         
         # Figür ve Eksenler
@@ -31,7 +32,7 @@ class SimulationApp:
         self.reset_simulation()
         
         # Animasyonu Başlat
-        # cache_frame_data=False uyarısını kapatmak ve frames limitini kaldırmak için generator kullanmıyoruz
+        # Performans için blitting her zaman açık (Aksi takdirde macOS'te donmalar yaşanıyor)
         self.ani = animation.FuncAnimation(
             self.fig, self.update, init_func=self.init_anim,
             blit=True, interval=20, cache_frame_data=False
@@ -85,6 +86,7 @@ class SimulationApp:
         t_type, t_name = track_mapping[label]
         
         # Track'i yeniden oluştur
+        self.visual_scale = 1.0 
         self.track = Track(track_type=t_type, track_name=t_name, track_width=6.0, num_points=500)
         
         # Animasyonu durdur (Arka planın önbellekte kalmaması için)
@@ -107,7 +109,7 @@ class SimulationApp:
         ax_speed = plt.axes([0.15, 0.15, 0.65, 0.03])
         ax_ld = plt.axes([0.15, 0.1, 0.65, 0.03])
         
-        self.slider_speed = Slider(ax_speed, 'Statik Hız [m/s]', 2.0, 25.0, valinit=10.0)
+        self.slider_speed = Slider(ax_speed, 'Statik Hız [m/s]', 2.0, 90.0, valinit=15.0)
         self.slider_ld = Slider(ax_ld, 'Statik Ld [m]', 2.0, 15.0, valinit=6.0)
         
         # Butonlar
@@ -134,11 +136,23 @@ class SimulationApp:
         self.car_d = Car(x=self.start_x, y=self.start_y, theta=self.start_theta, L=L)
         
         # Statik Controller Slider değerlerini alır
+        # Statik Controller Slider değerlerini alır
         init_v = self.slider_speed.val
         init_ld = self.slider_ld.val
-        self.controller_s = PurePursuitController(L=L, ld_min=init_ld, ld_k=0.0)
-        self.controller_d = PurePursuitController(L=L, ld_min=3.0, ld_k=0.5)
         
+        if self.track.track_type == 'api':
+            # F1 Ayarları (Hızlı Araçlar)
+            self.controller_s = PurePursuitController(L=L, ld_min=init_ld, ld_k=0.0, v_max=init_v, v_min=init_v, k_v=0.0)
+            self.controller_d = PurePursuitController(L=L, ld_min=8.0, ld_k=0.5, v_max=85.0, v_min=15.0, k_v=60.0)
+            self.a_max = 12.0
+            self.brake_max = 30.0
+        else:
+            # Standart Ayarlar
+            self.controller_s = PurePursuitController(L=L, ld_min=init_ld, ld_k=0.0, v_max=init_v, v_min=init_v, k_v=0.0)
+            self.controller_d = PurePursuitController(L=L, ld_min=3.0, ld_k=0.5, v_max=15.0, v_min=5.0, k_v=15.0)
+            self.a_max = 5.0
+            self.brake_max = 10.0
+            
         self.history_s = create_history_dict()
         self.history_d = create_history_dict()
         
@@ -175,8 +189,9 @@ class SimulationApp:
             return None, None
             
         # Gerçekçi ivmelenme/yavaşlama limitleri (m/s^2)
-        a_max = 5.0     
-        brake_max = 10.0 
+        # Gerçekçi ivmelenme/yavaşlama limitleri (m/s^2)
+        a_max = self.a_max     
+        brake_max = self.brake_max 
         
         v_current = history['v'][-1] if len(history['v']) > 0 else target_v
         
@@ -226,6 +241,9 @@ class SimulationApp:
             
         t = self.frame_count * DT
         
+        # F1 pisti için araç ve sınır çizgileri görsel olarak ölçeklendirildi.
+        # Bu yüzden kamera takibine gerek kalmadı ve blitting açık kalarak performansı artırdı.
+        
         # Statik aracın hızı ve Ld'si UI üzerinden HER ADIMDA okunur (Canlı değişiklik için)
         v_s = self.slider_speed.val
         self.controller_s.ld_min = self.slider_ld.val
@@ -246,12 +264,12 @@ class SimulationApp:
         
         # Çizimleri Uygula
         if not self.state['lap_completed_s']:
-            self.car_poly_s.set_xy(self.car_s.get_corners())
+            self.car_poly_s.set_xy(self.car_s.get_corners(self.visual_scale))
             self.target_marker_s.set_data([tx_s], [ty_s])
             self.trajectory_line_s.set_data(self.history_s['x'], self.history_s['y'])
             
         if not self.state['lap_completed_d']:
-            self.car_poly_d.set_xy(self.car_d.get_corners())
+            self.car_poly_d.set_xy(self.car_d.get_corners(self.visual_scale))
             self.target_marker_d.set_data([tx_d], [ty_d])
             self.trajectory_line_d.set_data(self.history_d['x'], self.history_d['y'])
             
