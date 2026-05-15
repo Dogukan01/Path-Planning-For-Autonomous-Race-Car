@@ -52,7 +52,8 @@ class SimulationApp:
         
         self.track.plot_track(ax=self.ax)
         x_min, x_max = self.ax.get_xlim()
-        self.ax.set_xlim(x_min, x_max + 35)
+        width = x_max - x_min
+        self.ax.set_xlim(x_min, x_max + width * 0.8)
         
         self.car_poly_s = plt.Polygon([[0,0]], closed=True, fill=True, color='red', alpha=0.7, label='Statik Araç')
         self.car_poly_d = plt.Polygon([[0,0]], closed=True, fill=True, color='blue', alpha=0.7, label='Dinamik Araç')
