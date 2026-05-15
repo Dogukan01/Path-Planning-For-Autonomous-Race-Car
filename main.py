@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
-from matplotlib.widgets import Slider, Button
+from matplotlib.widgets import Slider, Button, RadioButtons
 
 from track import Track
 from car import Car
@@ -20,20 +20,36 @@ def create_history_dict():
 
 class SimulationApp:
     def __init__(self):
-        self.track = Track(track_width=6.0, num_points=500)
+        self.track = Track(track_type='peanut', track_width=6.0, num_points=500)
         
-        # Başlangıç konumu ve yönelimi
+        # Figür ve Eksenler
+        self.fig, self.ax = plt.subplots(figsize=(12, 9))
+        plt.subplots_adjust(bottom=0.3, right=0.8) # Sağ tarafta RadioButtons için yer ayır
+        
+        self.setup_plot_elements()
+        self.setup_ui()
+        self.reset_simulation()
+        
+        # Animasyonu Başlat
+        # cache_frame_data=False uyarısını kapatmak ve frames limitini kaldırmak için generator kullanmıyoruz
+        self.ani = animation.FuncAnimation(
+            self.fig, self.update, init_func=self.init_anim,
+            blit=True, interval=20, cache_frame_data=False
+        )
+        
+        plt.show()
+
+    def setup_plot_elements(self):
+        """Pist ve araç grafik objelerini ana eksene (ax) yerleştirir."""
+        self.ax.clear()
+        
+        # Başlangıç konumu ve yönelimi (Her pistin başlangıcı farklıdır)
         self.start_x = self.track.cx[0]
         self.start_y = self.track.cy[0]
         dx = self.track.cx[1] - self.track.cx[0]
         dy = self.track.cy[1] - self.track.cy[0]
         self.start_theta = np.arctan2(dy, dx)
         
-        # Figür ve Eksenler
-        self.fig, self.ax = plt.subplots(figsize=(12, 9))
-        plt.subplots_adjust(bottom=0.3) # Alt tarafta UI için yer ayır
-        
-        # Görsel Öğelerin Kurulumu
         self.track.plot_track(ax=self.ax)
         x_min, x_max = self.ax.get_xlim()
         self.ax.set_xlim(x_min, x_max + 35)
@@ -52,19 +68,37 @@ class SimulationApp:
                                       horizontalalignment='right', verticalalignment='top',
                                       bbox=dict(facecolor='white', edgecolor='black', alpha=0.9, boxstyle='round,pad=0.5'))
         self.ax.legend(loc='center right', fancybox=True, shadow=True, fontsize=10)
-        self.ax.set_title('Otonom Araç Yörünge Takibi: Statik vs Dinamik', pad=15, fontweight='bold')
         
-        self.setup_ui()
+        title_text = f'Otonom Araç Yörünge Takibi: {self.track.track_name or self.track.track_type.capitalize()}'
+        self.ax.set_title(title_text, pad=15, fontweight='bold')
+
+    def on_track_changed(self, label):
+        """RadioButtons ile yeni bir pist seçildiğinde tetiklenir."""
+        track_mapping = {
+            'Fıstık (Varsayılan)': ('peanut', ''),
+            'Yuvarlak (Test)': ('circle', ''),
+            'Monza (F1)': ('api', 'Monza'),
+            'Silverstone (F1)': ('api', 'Silverstone'),
+            'Catalunya (F1)': ('api', 'Catalunya')
+        }
+        t_type, t_name = track_mapping[label]
+        
+        # Track'i yeniden oluştur
+        self.track = Track(track_type=t_type, track_name=t_name, track_width=6.0, num_points=500)
+        
+        # Animasyonu durdur (Arka planın önbellekte kalmaması için)
+        if hasattr(self, 'ani') and hasattr(self.ani, 'event_source') and self.ani.event_source:
+            self.ani.event_source.stop()
+            
+        # Ekrandaki çizgileri temizle ve yeniden çiz
+        self.setup_plot_elements()
         self.reset_simulation()
         
-        # Animasyonu Başlat
-        # cache_frame_data=False uyarısını kapatmak ve frames limitini kaldırmak için generator kullanmıyoruz
+        # Animasyonu yeni arkaplan ile yeniden başlat
         self.ani = animation.FuncAnimation(
             self.fig, self.update, init_func=self.init_anim,
             blit=True, interval=20, cache_frame_data=False
         )
-        
-        plt.show()
 
     def setup_ui(self):
         """Kullanıcı arayüzünü (Slider ve Butonlar) kurar."""
@@ -84,6 +118,12 @@ class SimulationApp:
         
         self.btn_restart.on_clicked(self.on_restart_clicked)
         self.btn_analysis.on_clicked(self.on_analysis_clicked)
+        
+        # Track Selector RadioButtons
+        ax_radio = plt.axes([0.82, 0.35, 0.15, 0.25])
+        ax_radio.set_title('Pist Seçimi', fontweight='bold')
+        self.radio_track = RadioButtons(ax_radio, ('Fıstık (Varsayılan)', 'Yuvarlak (Test)', 'Monza (F1)', 'Silverstone (F1)', 'Catalunya (F1)'))
+        self.radio_track.on_clicked(self.on_track_changed)
 
     def reset_simulation(self):
         """Araçların konumunu ve geçmişini sıfırlar."""
