@@ -48,7 +48,8 @@ class SimulationApp:
         self.trajectory_line_s, = self.ax.plot([], [], 'r-', linewidth=1.0, alpha=0.5)
         self.trajectory_line_d, = self.ax.plot([], [], 'b-', linewidth=1.0, alpha=0.5)
         
-        self.time_text = self.ax.text(0.02, 0.95, '', transform=self.ax.transAxes, fontsize=11, fontweight='bold',
+        self.time_text = self.ax.text(0.98, 0.98, '', transform=self.ax.transAxes, fontsize=11, fontweight='bold',
+                                      horizontalalignment='right', verticalalignment='top',
                                       bbox=dict(facecolor='white', edgecolor='black', alpha=0.9, boxstyle='round,pad=0.5'))
         self.ax.legend(loc='center right', fancybox=True, shadow=True, fontsize=10)
         self.ax.set_title('Otonom Araç Yörünge Takibi: Statik vs Dinamik', pad=15, fontweight='bold')
