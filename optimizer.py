@@ -98,8 +98,8 @@ class TrackOptimizer:
                 dist_sq = (x - obs['x'])**2 + (y - obs['y'])**2
                 dist = np.sqrt(dist_sq)
                 
-                # Güvenlik mesafesi (engel yarıçapı + araç genişliği payı)
-                safe_dist = obs['radius'] + 2.0
+                # Güvenlik mesafesi (engel yarıçapı + araç yarı genişliği (0.8m) + güvenlik marjı (0.2m) = radius + 1.0m)
+                safe_dist = obs['radius'] + 1.0
                 
                 # Eğer yol engele güvenlik mesafesinden yakınsa yüksek ceza ver
                 violation = np.maximum(0, safe_dist - dist)

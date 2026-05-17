@@ -98,7 +98,7 @@ class Track:
             self._generate_peanut()
 
     def _generate_circle(self):
-        t = np.linspace(0, 2 * np.pi, self.num_points)
+        t = np.linspace(0, 2 * np.pi, self.num_points, endpoint=False)
         r = 30.0
         self.cx = r * np.cos(t)
         self.cy = r * np.sin(t)
@@ -107,7 +107,7 @@ class Track:
         self._calculate_boundaries()
 
     def _generate_peanut(self):
-        t = np.linspace(0, 2 * np.pi, self.num_points)
+        t = np.linspace(0, 2 * np.pi, self.num_points, endpoint=False)
         r = 30 + 15 * np.cos(2 * t)
         self.cx = r * np.cos(t)
         self.cy = r * np.sin(t)

@@ -140,14 +140,14 @@ class SimulationApp:
             self.a_max = 12.0
             self.brake_max = 30.0
             self.car_mode = 'dynamic'
-            self.visual_scale = 2.0 # F1 pistlerinde araç yakınlaştırıldığında da gerçekçi boyutta görünsün (2.0x)
+            self.visual_scale = 1.0 # Fiziksel birebir boyutta çizilsin (Zoom yapıldığında kusursuz görünür)
         else:
             # Standart Ayarlar (Düşük hızlar - Kinematik Model)
             self.controller = PurePursuitController(L=L, ld_min=3.0, ld_k=0.1, v_max=30.0, v_min=5.0, k_v=0.0)
             self.a_max = 8.0
             self.brake_max = 15.0
             self.car_mode = 'kinematic'
-            self.visual_scale = 1.5 # Standart pistlerde biraz daha büyük çizilsin
+            self.visual_scale = 1.0 # Fiziksel birebir boyutta çizilsin
             
         self.history = create_history_dict()
         
