@@ -57,20 +57,16 @@ class SimulationApp:
         self.start_theta = np.arctan2(dy, dx)
         
         self.track.plot_track(ax=self.ax)
-        x_min, x_max = self.ax.get_xlim()
-        width = x_max - x_min
-        self.ax.set_xlim(x_min, x_max + width * 0.8)
-        
         self.car_poly = plt.Polygon([[0,0]], closed=True, fill=True, color='#FF3366', alpha=0.9, label='Optimal (Racing Line)')
         self.ax.add_patch(self.car_poly)
         
         self.target_marker, = self.ax.plot([], [], marker='x', color='#FF3366', markersize=8)
         self.trajectory_line, = self.ax.plot([], [], linestyle='-', color='#FF3366', linewidth=1.5, alpha=0.5)
         
-        self.time_text = self.ax.text(0.98, 0.98, '', transform=self.ax.transAxes, fontsize=11, fontweight='bold',
-                                      horizontalalignment='right', verticalalignment='top',
+        self.time_text = self.ax.text(1.02, 0.65, '', transform=self.ax.transAxes, fontsize=10, fontweight='bold',
+                                      horizontalalignment='left', verticalalignment='top',
                                       bbox=dict(facecolor='white', edgecolor='black', alpha=0.9, boxstyle='round,pad=0.5'))
-        self.ax.legend(loc='center right', fancybox=True, shadow=True, fontsize=10)
+        self.ax.legend(bbox_to_anchor=(1.02, 1.0), loc='upper left', fancybox=True, shadow=True, fontsize=10)
         
         title_text = f'Otonom Araç Yörünge Takibi: {self.track.track_name or self.track.track_type.capitalize()}'
         self.ax.set_title(title_text, pad=15, fontweight='bold')

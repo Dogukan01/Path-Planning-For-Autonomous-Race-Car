@@ -223,10 +223,6 @@ class Track:
         ax.plot(self.ix, self.iy, '-', color='black', linewidth=2, label='Pist Sınırları (Boundaries)')
         ax.plot(self.ox, self.oy, '-', color='black', linewidth=2)
         
-        # Optimal Yarış Çizgisi (Racing Line - Pembe noktalı çizgi)
-        if show_optimal and len(self.opt_x) > 0:
-            ax.plot(self.opt_x, self.opt_y, ':', color='#FF3366', linewidth=2.5, label='Optimal Yarış Çizgisi (Racing Line)')
-        
         # Engelleri çiz (Fiziksel daire ve her ölçekte görünür olması için sabit boyutlu nokta işareti)
         for i, obs in enumerate(self.obstacles):
             # Fiziksel boyut dairesi
