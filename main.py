@@ -57,15 +57,11 @@ class SimulationApp:
         width = x_max - x_min
         self.ax.set_xlim(x_min, x_max + width * 0.8)
         
-        self.car_poly_s = plt.Polygon([[0,0]], closed=True, fill=True, color='red', alpha=0.7, label='Baseline (Merkez)')
-        self.car_poly_d = plt.Polygon([[0,0]], closed=True, fill=True, color='lime', alpha=0.7, label='Optimal (Racing Line)')
-        self.ax.add_patch(self.car_poly_s)
-        self.ax.add_patch(self.car_poly_d)
+        self.car_poly = plt.Polygon([[0,0]], closed=True, fill=True, color='lime', alpha=0.7, label='Optimal (Racing Line)')
+        self.ax.add_patch(self.car_poly)
         
-        self.target_marker_s, = self.ax.plot([], [], 'rx', markersize=8)
-        self.target_marker_d, = self.ax.plot([], [], 'bx', markersize=8)
-        self.trajectory_line_s, = self.ax.plot([], [], 'r-', linewidth=1.0, alpha=0.5)
-        self.trajectory_line_d, = self.ax.plot([], [], 'b-', linewidth=1.0, alpha=0.5)
+        self.target_marker, = self.ax.plot([], [], 'bx', markersize=8)
+        self.trajectory_line, = self.ax.plot([], [], 'b-', linewidth=1.0, alpha=0.5)
         
         self.time_text = self.ax.text(0.98, 0.98, '', transform=self.ax.transAxes, fontsize=11, fontweight='bold',
                                       horizontalalignment='right', verticalalignment='top',
@@ -112,16 +108,9 @@ class SimulationApp:
 
     def setup_ui(self):
         """Kullanıcı arayüzünü (Slider ve Butonlar) kurar."""
-        # Kaydırıcı (Slider) Konumları [left, bottom, width, height]
-        ax_speed = plt.axes([0.15, 0.15, 0.65, 0.03])
-        ax_ld = plt.axes([0.15, 0.1, 0.65, 0.03])
-        
-        self.slider_speed = Slider(ax_speed, 'Baseline Hız [m/s]', 2.0, 90.0, valinit=15.0)
-        self.slider_ld = Slider(ax_ld, 'Baseline Ld [m]', 2.0, 15.0, valinit=6.0)
-        
         # Butonlar
         ax_restart = plt.axes([0.15, 0.02, 0.15, 0.05])
-        ax_analysis = plt.axes([0.65, 0.02, 0.15, 0.05])
+        ax_analysis = plt.axes([0.35, 0.02, 0.15, 0.05])
         
         self.btn_restart = Button(ax_restart, 'Yeniden Başlat', color='lightgoldenrodyellow', hovercolor='0.975')
         self.btn_analysis = Button(ax_analysis, 'Analizi Göster', color='lightblue', hovercolor='0.975')
@@ -139,33 +128,23 @@ class SimulationApp:
         """Araçların konumunu ve geçmişini sıfırlar."""
         self.frame_count = 0
         
-        self.car_s = Car(x=self.start_x, y=self.start_y, theta=self.start_theta, L=L)
-        self.car_d = Car(x=self.start_x, y=self.start_y, theta=self.start_theta, L=L)
-        
-        # Statik Controller Slider değerlerini alır
-        # Statik Controller Slider değerlerini alır
-        init_v = self.slider_speed.val
-        init_ld = self.slider_ld.val
+        self.car = Car(x=self.start_x, y=self.start_y, theta=self.start_theta, L=L)
         
         if self.track.track_type == 'api':
             # F1 Ayarları (Hızlı Araçlar)
-            self.controller_s = PurePursuitController(L=L, ld_min=init_ld, ld_k=0.0, v_max=init_v, v_min=init_v, k_v=0.0)
-            self.controller_d = PurePursuitController(L=L, ld_min=8.0, ld_k=0.5, v_max=85.0, v_min=15.0, k_v=0.0) # k_v 0 çünkü profile kullanıyor
+            self.controller = PurePursuitController(L=L, ld_min=8.0, ld_k=0.5, v_max=85.0, v_min=15.0, k_v=0.0) # k_v 0 çünkü profile kullanıyor
             self.a_max = 12.0
             self.brake_max = 30.0
         else:
             # Standart Ayarlar
-            self.controller_s = PurePursuitController(L=L, ld_min=init_ld, ld_k=0.0, v_max=init_v, v_min=init_v, k_v=0.0)
-            self.controller_d = PurePursuitController(L=L, ld_min=3.0, ld_k=0.5, v_max=30.0, v_min=5.0, k_v=0.0)
+            self.controller = PurePursuitController(L=L, ld_min=3.0, ld_k=0.5, v_max=30.0, v_min=5.0, k_v=0.0)
             self.a_max = 8.0
             self.brake_max = 15.0
             
-        self.history_s = create_history_dict()
-        self.history_d = create_history_dict()
+        self.history = create_history_dict()
         
         self.state = {
-            'last_closest_idx_s': 0, 'lap_completed_s': False,
-            'last_closest_idx_d': 0, 'lap_completed_d': False
+            'last_closest_idx': 0, 'lap_completed': False
         }
         
         self.init_anim()
@@ -175,21 +154,17 @@ class SimulationApp:
 
     def on_analysis_clicked(self, event):
         """Veri varsa plot_analysis'i çağırır."""
-        if len(self.history_s['t']) > 0:
-            plot_analysis(self.history_s, self.history_d)
+        if len(self.history['t']) > 0:
+            plot_analysis(self.history)
         else:
             print("Henüz kaydedilmiş veri yok.")
 
     def init_anim(self):
-        self.car_poly_s.set_xy([[0,0]])
-        self.car_poly_d.set_xy([[0,0]])
-        self.target_marker_s.set_data([], [])
-        self.target_marker_d.set_data([], [])
-        self.trajectory_line_s.set_data([], [])
-        self.trajectory_line_d.set_data([], [])
+        self.car_poly.set_xy([[0,0]])
+        self.target_marker.set_data([], [])
+        self.trajectory_line.set_data([], [])
         self.time_text.set_text('')
-        return (self.car_poly_s, self.car_poly_d, self.target_marker_s, 
-                self.target_marker_d, self.trajectory_line_s, self.trajectory_line_d, self.time_text)
+        return (self.car_poly, self.target_marker, self.trajectory_line, self.time_text)
 
     def update_car(self, car, controller, history, target_v, lap_completed_key, last_idx_key, path_x, path_y):
         if self.state[lap_completed_key]:
@@ -240,59 +215,37 @@ class SimulationApp:
         return target_x, target_y
 
     def update(self, frame):
-        # Eğer her iki araç da turu tamamladıysa sadece ekranı tut (Yeni bir frame hesaplama)
-        if self.state['lap_completed_s'] and self.state['lap_completed_d']:
-            return (self.car_poly_s, self.car_poly_d, self.target_marker_s, 
-                    self.target_marker_d, self.trajectory_line_s, self.trajectory_line_d, self.time_text)
+        if self.state['lap_completed']:
+            return (self.car_poly, self.target_marker, self.trajectory_line, self.time_text)
             
         t = self.frame_count * DT
         
-        # F1 pisti için araç ve sınır çizgileri görsel olarak ölçeklendirildi.
-        # Bu yüzden kamera takibine gerek kalmadı ve blitting açık kalarak performansı artırdı.
-        
-        # Baseline (Merkez) aracın hızı ve Ld'si UI üzerinden HER ADIMDA okunur (Canlı değişiklik için)
-        v_s = self.slider_speed.val
-        self.controller_s.ld_min = self.slider_ld.val
-        
-        # Baseline Aracı Güncelle
-        tx_s, ty_s = self.update_car(self.car_s, self.controller_s, self.history_s, v_s, 'lap_completed_s', 'last_closest_idx_s', self.track.cx, self.track.cy)
-        
-        # Optimal (Dinamik) Aracı Güncelle
-        prev_v_d = self.history_d['v'][-1] if len(self.history_d['v']) > 0 else 10.0
-        tmp_idx, _ = self.controller_d.search_target_index(self.car_d.x, self.car_d.y, self.track.opt_x, self.track.opt_y, prev_v_d)
+        # Optimal Aracı Güncelle
+        prev_v = self.history['v'][-1] if len(self.history['v']) > 0 else 10.0
+        tmp_idx, _ = self.controller.search_target_index(self.car.x, self.car.y, self.track.opt_x, self.track.opt_y, prev_v)
         
         # Yeni hızı optimize edilmiş profilden al
-        v_d = self.controller_d.get_profile_speed(tmp_idx, self.track.opt_v)
+        v_d = self.controller.get_profile_speed(tmp_idx, self.track.opt_v)
 
-        tx_d, ty_d = self.update_car(self.car_d, self.controller_d, self.history_d, v_d, 'lap_completed_d', 'last_closest_idx_d', self.track.opt_x, self.track.opt_y)
+        tx, ty = self.update_car(self.car, self.controller, self.history, v_d, 'lap_completed', 'last_closest_idx', self.track.opt_x, self.track.opt_y)
         
         # Çizimleri Uygula
-        if not self.state['lap_completed_s']:
-            self.car_poly_s.set_xy(self.car_s.get_corners(self.visual_scale))
-            self.target_marker_s.set_data([tx_s], [ty_s])
-            self.trajectory_line_s.set_data(self.history_s['x'], self.history_s['y'])
-            
-        if not self.state['lap_completed_d']:
-            self.car_poly_d.set_xy(self.car_d.get_corners(self.visual_scale))
-            self.target_marker_d.set_data([tx_d], [ty_d])
-            self.trajectory_line_d.set_data(self.history_d['x'], self.history_d['y'])
+        if not self.state['lap_completed']:
+            self.car_poly.set_xy(self.car.get_corners(self.visual_scale))
+            self.target_marker.set_data([tx], [ty])
+            self.trajectory_line.set_data(self.history['x'], self.history['y'])
             
         # Bilgi Metni
         status_text = f"Time: {t:.1f} s\n"
-        status_text += f"Baseline - Hız: {v_s:.1f} m/s, Ld: {self.controller_s.current_ld:.1f} m"
-        if self.state['lap_completed_s']: status_text += " (BİTTİ)"
-        status_text += "\n"
-        status_text += f"Optimal - Hız: {v_d:.1f} m/s, Ld: {self.controller_d.current_ld:.1f} m"
-        if self.state['lap_completed_d']: status_text += " (BİTTİ)"
+        status_text += f"Optimal - Hız: {v_d:.1f} m/s, Ld: {self.controller.current_ld:.1f} m"
+        if self.state['lap_completed']: status_text += " (BİTTİ)"
         
         self.time_text.set_text(status_text)
         self.frame_count += 1
         
-        return (self.car_poly_s, self.car_poly_d, self.target_marker_s, 
-                self.target_marker_d, self.trajectory_line_s, self.trajectory_line_d, self.time_text)
+        return (self.car_poly, self.target_marker, self.trajectory_line, self.time_text)
 
 if __name__ == '__main__':
     print("Simülasyon UI Modunda başlatılıyor...")
-    print("Arayüzdeki (UI) kaydırıcıları kullanarak statik aracın hızını ve ileri bakma mesafesini anlık değiştirebilirsiniz.")
     print("Analizi görmek için 'Analizi Göster' butonuna basmanız yeterlidir.")
     app = SimulationApp()

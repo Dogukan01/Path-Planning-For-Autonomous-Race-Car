@@ -146,9 +146,6 @@ class Track:
             fig, ax = plt.subplots(figsize=(10, 8))
             show_plot = True
             
-        # Merkez çizgi
-        ax.plot(self.cx, self.cy, '--', color='gold', linewidth=2, label='Centerline')
-        
         if show_optimal and len(self.opt_x) > 0:
             ax.plot(self.opt_x, self.opt_y, '-', color='lime', linewidth=2.5, label='Optimal Racing Line')
             
