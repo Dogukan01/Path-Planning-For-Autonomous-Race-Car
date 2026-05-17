@@ -146,8 +146,8 @@ class Track:
             fig, ax = plt.subplots(figsize=(10, 8))
             show_plot = True
             
-        if show_optimal and len(self.opt_x) > 0:
-            ax.plot(self.opt_x, self.opt_y, '-', color='cyan', linewidth=2.5, label='Optimal Racing Line')
+        # Merkez Çizgi (Kesikli)
+        ax.plot(self.cx, self.cy, '--', color='gray', linewidth=1.5, alpha=0.7, label='Centerline')
             
         # İç ve dış sınırlar (Tek bir lejant ögesi olarak göstermek için sadece birine etiket veriyoruz)
         ax.plot(self.ix, self.iy, '-', color='black', linewidth=2, label='Pist Sınırları (Boundaries)')
