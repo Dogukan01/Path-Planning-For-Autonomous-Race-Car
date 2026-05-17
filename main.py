@@ -5,7 +5,7 @@ from matplotlib.widgets import Slider, Button, RadioButtons
 
 from track import Track
 from car import Car
-from controller import PurePursuitController
+from controller import PurePursuitController, MPCController
 from analysis import plot_analysis
 
 # --- Simülasyon Parametreleri ---
@@ -21,6 +21,7 @@ def create_history_dict():
 class SimulationApp:
     def __init__(self):
         self.visual_scale = 1.0
+        self.selected_controller_type = 'mpc' # Varsayılan olarak MPC aktif
         self.track = Track(track_type='peanut', track_width=6.0, num_points=500)
         
         # Rastgele Engel Oluşturma (3 adet)
@@ -62,6 +63,7 @@ class SimulationApp:
         
         self.target_marker, = self.ax.plot([], [], marker='x', color='#FF3366', markersize=8)
         self.trajectory_line, = self.ax.plot([], [], linestyle='-', color='#FF3366', linewidth=1.5, alpha=0.5)
+        self.mpc_pred_line, = self.ax.plot([], [], linestyle='--', color='#33FF66', linewidth=2.5, label='MPC Öngörü (Prediction)')
         
         self.time_text = self.ax.text(1.02, 0.65, '', transform=self.ax.transAxes, fontsize=10, fontweight='bold',
                                       horizontalalignment='left', verticalalignment='top',
@@ -127,6 +129,20 @@ class SimulationApp:
         ax_radio.set_title('Pist Seçimi', fontweight='bold')
         self.radio_track = RadioButtons(ax_radio, ('Fıstık (Varsayılan)', 'Yuvarlak (Test)', 'Monza (F1)', 'Silverstone (F1)', 'Catalunya (F1)'))
         self.radio_track.on_clicked(self.on_track_changed)
+        
+        # Controller Selector RadioButtons
+        ax_ctrl_radio = plt.axes([0.82, 0.15, 0.15, 0.15])
+        ax_ctrl_radio.set_title('Kontrolcü Seçimi', fontweight='bold')
+        self.radio_ctrl = RadioButtons(ax_ctrl_radio, ('MPC (Phase 3)', 'Pure Pursuit'))
+        self.radio_ctrl.on_clicked(self.on_controller_changed)
+
+    def on_controller_changed(self, label):
+        """Kullanıcı MPC veya Pure Pursuit arasında geçiş yaptığında tetiklenir."""
+        if label == 'MPC (Phase 3)':
+            self.selected_controller_type = 'mpc'
+        else:
+            self.selected_controller_type = 'pure_pursuit'
+        self.reset_simulation()
 
     def reset_simulation(self):
         """Araçların konumunu ve geçmişini sıfırlar."""
@@ -134,20 +150,32 @@ class SimulationApp:
         
         self.car = Car(x=self.start_x, y=self.start_y, theta=self.start_theta, L=L)
         
-        if self.track.track_type == 'api':
-            # F1 Ayarları (Hızlı Araçlar - Dinamik Model Aktif)
-            self.controller = PurePursuitController(L=L, ld_min=4.0, ld_k=0.15, v_max=85.0, v_min=15.0, k_v=0.0) # Corner cutting önlemek için ld_k 0.15 yapıldı
-            self.a_max = 12.0
-            self.brake_max = 30.0
-            self.car_mode = 'dynamic'
-            self.visual_scale = 1.0 # Fiziksel birebir boyutta çizilsin (Zoom yapıldığında kusursuz görünür)
+        if self.selected_controller_type == 'mpc':
+            # MPC Kontrolcü Ayarları
+            N_steps = 12 if self.track.track_type == 'api' else 8
+            dt_step = 0.05
+            self.controller = MPCController(L=L, N=N_steps, dt=dt_step)
+            if self.track.track_type == 'api':
+                self.a_max = 12.0
+                self.brake_max = 30.0
+                self.car_mode = 'dynamic'
+            else:
+                self.a_max = 8.0
+                self.brake_max = 15.0
+                self.car_mode = 'kinematic'
         else:
-            # Standart Ayarlar (Düşük hızlar - Kinematik Model)
-            self.controller = PurePursuitController(L=L, ld_min=3.0, ld_k=0.1, v_max=30.0, v_min=5.0, k_v=0.0)
-            self.a_max = 8.0
-            self.brake_max = 15.0
-            self.car_mode = 'kinematic'
-            self.visual_scale = 1.0 # Fiziksel birebir boyutta çizilsin
+            # Pure Pursuit Kontrolcü Ayarları
+            if self.track.track_type == 'api':
+                self.controller = PurePursuitController(L=L, ld_min=4.0, ld_k=0.15, v_max=85.0, v_min=15.0, k_v=0.0)
+                self.a_max = 12.0
+                self.brake_max = 30.0
+                self.car_mode = 'dynamic'
+            else:
+                self.controller = PurePursuitController(L=L, ld_min=3.0, ld_k=0.1, v_max=30.0, v_min=5.0, k_v=0.0)
+                self.a_max = 8.0
+                self.brake_max = 15.0
+                self.car_mode = 'kinematic'
+        self.visual_scale = 1.0 # Fiziksel birebir boyutta çizilsin
             
         self.history = create_history_dict()
         
@@ -171,8 +199,9 @@ class SimulationApp:
         self.car_poly.set_xy([[0,0]])
         self.target_marker.set_data([], [])
         self.trajectory_line.set_data([], [])
+        self.mpc_pred_line.set_data([], [])
         self.time_text.set_text('')
-        return (self.car_poly, self.target_marker, self.trajectory_line, self.time_text)
+        return (self.car_poly, self.target_marker, self.trajectory_line, self.time_text, self.mpc_pred_line)
 
     def update_car(self, car, controller, history, target_v, lap_completed_key, last_idx_key, path_x, path_y):
         if self.state[lap_completed_key]:
@@ -191,17 +220,22 @@ class SimulationApp:
         else:
             v_actual = target_v
             
-        target_idx, closest_idx = controller.search_target_index(car.x, car.y, path_x, path_y, v_actual)
-        target_x = path_x[target_idx]
-        target_y = path_y[target_idx]
+        if isinstance(controller, MPCController):
+            closest_idx = controller._get_closest_index(car.x, car.y, path_x, path_y)
+            delta = controller.get_steering_angle(car.x, car.y, car.theta, v_actual, path_x, path_y)
+            target_x = controller.pred_x[-1] if hasattr(controller, 'pred_x') else car.x
+            target_y = controller.pred_y[-1] if hasattr(controller, 'pred_y') else car.y
+        else:
+            target_idx, closest_idx = controller.search_target_index(car.x, car.y, path_x, path_y, v_actual)
+            target_x = path_x[target_idx]
+            target_y = path_y[target_idx]
+            delta = controller.get_steering_angle(car.x, car.y, car.theta, target_x, target_y)
         
         # Tur tamamlama kontrolü
         if self.frame_count > 50 and self.state[last_idx_key] > self.track.num_points - 50 and closest_idx < 50:
             self.state[lap_completed_key] = True
             
         self.state[last_idx_key] = closest_idx
-        
-        delta = controller.get_steering_angle(car.x, car.y, car.theta, target_x, target_y)
         car.update(v=v_actual, delta=delta, dt=DT, mode=self.car_mode)
         
         next_idx = (closest_idx + 1) % len(path_x)
@@ -218,20 +252,23 @@ class SimulationApp:
         history['cte'].append(cte)
         history['steer'].append(delta)
         history['v'].append(v_actual)
-        history['ld'].append(controller.current_ld)
+        history['ld'].append(controller.current_ld if hasattr(controller, 'current_ld') else 0.0)
         
         return target_x, target_y
 
     def update(self, frame):
         if self.state['lap_completed']:
-            return (self.car_poly, self.target_marker, self.trajectory_line, self.time_text)
+            return (self.car_poly, self.target_marker, self.trajectory_line, self.time_text, self.mpc_pred_line)
             
         t = self.frame_count * DT
         
         # Optimal Aracı Güncelle
         prev_v = self.history['v'][-1] if len(self.history['v']) > 0 else 10.0
-        tmp_idx, _ = self.controller.search_target_index(self.car.x, self.car.y, self.track.opt_x, self.track.opt_y, prev_v)
-        
+        if isinstance(self.controller, MPCController):
+            tmp_idx = self.controller._get_closest_index(self.car.x, self.car.y, self.track.opt_x, self.track.opt_y)
+        else:
+            tmp_idx, _ = self.controller.search_target_index(self.car.x, self.car.y, self.track.opt_x, self.track.opt_y, prev_v)
+            
         # Yeni hızı optimize edilmiş profilden al
         v_d = self.controller.get_profile_speed(tmp_idx, self.track.opt_v)
 
@@ -240,18 +277,29 @@ class SimulationApp:
         # Çizimleri Uygula
         if not self.state['lap_completed']:
             self.car_poly.set_xy(self.car.get_corners(self.visual_scale))
-            self.target_marker.set_data([tx], [ty])
+            if tx is not None:
+                self.target_marker.set_data([tx], [ty])
             self.trajectory_line.set_data(self.history['x'], self.history['y'])
             
+            if isinstance(self.controller, MPCController) and hasattr(self.controller, 'pred_x'):
+                self.mpc_pred_line.set_data(self.controller.pred_x, self.controller.pred_y)
+            else:
+                self.mpc_pred_line.set_data([], [])
+            
         # Bilgi Metni
+        v_act = self.history['v'][-1] if len(self.history['v']) > 0 else v_d
         status_text = f"Time: {t:.1f} s\n"
-        status_text += f"Optimal - Hız: {v_d:.1f} m/s, Ld: {self.controller.current_ld:.1f} m"
+        if isinstance(self.controller, MPCController):
+            status_text += f"Hız: {v_act:.1f} m/s (MPC)"
+        else:
+            status_text += f"Hız: {v_act:.1f} m/s, Ld: {self.controller.current_ld:.1f} m (PP)"
+            
         if self.state['lap_completed']: status_text += " (BİTTİ)"
         
         self.time_text.set_text(status_text)
         self.frame_count += 1
         
-        return (self.car_poly, self.target_marker, self.trajectory_line, self.time_text)
+        return (self.car_poly, self.target_marker, self.trajectory_line, self.time_text, self.mpc_pred_line)
 
 if __name__ == '__main__':
     print("Simülasyon UI Modunda başlatılıyor...")
