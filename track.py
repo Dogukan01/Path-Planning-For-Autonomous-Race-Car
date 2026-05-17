@@ -65,14 +65,14 @@ class Track:
                     f.write(csv_data)
                 
             reader = csv.reader(io.StringIO(csv_data))
-            # İlk satırı kontrol et (header olabilir)
+            # İlk satırı kontrol et (header veya yorum satırı olabilir)
+            # FIX: önceki replace() zinciri negatif sayıları yanlış parse ediyordu
             header = next(reader)
-            if not header[0].startswith('#') and not header[0].replace('.','',1).isdigit():
-                pass # Header ise bir şey yapma
-            elif header[0].replace('-','',1).replace('.','',1).isdigit():
-                # Sayı ise veridir, listeye ekle
+            try:
                 self.cx.append(float(header[0]))
                 self.cy.append(float(header[1]))
+            except (ValueError, IndexError):
+                pass  # Gerçekten header/yorum satırıysa atla
             
             points = []
             for row in reader:
@@ -234,7 +234,8 @@ class Track:
         
         # Gerçekçi oranlar için eksenleri eşitliyoruz
         ax.set_aspect('equal')
-        ax.set_title('Race Track (Peanut Shape)')
+        track_label = self.track_name if self.track_name else self.track_type.capitalize()
+        ax.set_title(f'Race Track — {track_label}')  # FIX: hardcoded başlık yerine dinamik isim
         ax.set_xlabel('X [m]')
         ax.set_ylabel('Y [m]')
         ax.legend()

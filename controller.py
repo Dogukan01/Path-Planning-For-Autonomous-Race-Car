@@ -115,7 +115,7 @@ class MPCController:
     def get_profile_speed(self, target_idx, v_profile):
         """Önceden hesaplanmış (optimize edilmiş) hız profilinden hedef hızı döndürür."""
         if v_profile is None or len(v_profile) == 0:
-            return 30.0
+            return self.v_max if hasattr(self, 'v_max') else 30.0  # FIX: hardcoded 30.0 yerine v_max
         return v_profile[target_idx]
 
     def _get_closest_index(self, x, y, path_x, path_y):
@@ -149,7 +149,7 @@ class MPCController:
             # Kinematik Araç Modeli Tahmin Denklemleri
             x += v * np.cos(theta) * self.dt
             y += v * np.sin(theta) * self.dt
-            theta += (v / self.L) * delta * self.dt
+            theta += (v / self.L) * np.tan(delta) * self.dt  # FIX: np.tan eklendi
             
             # 1. Yanal Hata Cezası (Crosstrack Error)
             cost += w_lat * ((x - ref_x[k+1])**2 + (y - ref_y[k+1])**2)
@@ -214,6 +214,7 @@ class MPCController:
         
         # 2. Olası osilasyonları, kontrolcü-araç dinamik gecikmesini engellemek için hızla değişen dinamik look-ahead
         look_ahead = max(1.5, 0.08 * v)
+        self.current_ld = look_ahead  # FIX: analiz grafiği için attribute olarak sakla
         
         # 3. Ufuktaki fiziksel hedef mesafeleri (Gecikme telafisi eklenmiş olarak)
         target_dists = np.arange(self.N + 1) * (v * self.dt) + look_ahead
@@ -274,7 +275,7 @@ class MPCController:
             d = opt_u[k]
             px += v * np.cos(ptheta) * self.dt
             py += v * np.sin(ptheta) * self.dt
-            ptheta += (v / self.L) * d * self.dt
+            ptheta += (v / self.L) * np.tan(d) * self.dt  # FIX: np.tan eklendi
             pred_x[k+1] = px
             pred_y[k+1] = py
             
