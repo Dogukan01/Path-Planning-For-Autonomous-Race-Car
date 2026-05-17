@@ -133,6 +133,56 @@ class Track:
         """Piste dairesel bir engel ekler."""
         self.obstacles.append({'x': x, 'y': y, 'radius': radius})
 
+    def generate_random_obstacles(self, count=3, radius=1.0):
+        """Pist üzerinde başlangıç noktasından uzak, pist sınırları içinde rastgele yanal kaymış engeller üretir."""
+        self.obstacles = []
+        num_pts = len(self.cx)
+        if num_pts < 120:
+            return
+            
+        # Başlangıç noktasından (0) ve bitişten uzak durmak için [50, num_pts-50] aralığını seçiyoruz
+        # Engellerin birbirine çok yakın olmaması için seçilen indekslerin farkı en az 80 olmalıdır
+        used_indices = []
+        
+        attempts = 0
+        while len(self.obstacles) < count and attempts < 150:
+            idx = np.random.randint(50, num_pts - 50)
+            
+            # Diğer engellere olan uzaklığı kontrol et (indeks bazında)
+            too_close = False
+            for u_idx in used_indices:
+                if abs(idx - u_idx) < 80: # 80 adım uzaklık
+                    too_close = True
+                    break
+                    
+            if not too_close:
+                # Normal dik vektörünü hesapla (Yanal yön için)
+                prev_idx = (idx - 1) % num_pts
+                next_idx = (idx + 1) % num_pts
+                dx = self.cx[next_idx] - self.cx[prev_idx]
+                dy = self.cy[next_idx] - self.cy[prev_idx]
+                length = np.hypot(dx, dy)
+                if length == 0:
+                    nx, ny = 0.0, 1.0
+                else:
+                    nx = -dy / length
+                    ny = dx / length
+                
+                # Rastgele yanal kaydırma (lateral offset)
+                # Engelin pist dışına taşmaması için sınır: (genişlik / 2) - radius - güvenlik payı (0.3m)
+                max_offset = max(0.1, (self.track_width / 2.0) - radius - 0.3)
+                s = np.random.uniform(-1.0, 1.0)
+                offset = s * max_offset
+                
+                # Engeli yanal olarak kaydırılmış yeni koordinata ekle
+                obs_x = self.cx[idx] + offset * nx
+                obs_y = self.cy[idx] + offset * ny
+                
+                self.add_obstacle(obs_x, obs_y, radius)
+                used_indices.append(idx)
+                
+            attempts += 1
+
     def optimize_track(self, max_v=85.0, a_max=12.0, brake_max=30.0, mu=1.0):
         """
         Pist merkez çizgisi ve sınırlarına dayanarak optimal yarış çizgisini
