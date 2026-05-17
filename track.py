@@ -65,14 +65,14 @@ class Track:
                     f.write(csv_data)
                 
             reader = csv.reader(io.StringIO(csv_data))
-            # İlk satırı kontrol et (header veya yorum satırı olabilir)
-            # FIX: önceki replace() zinciri negatif sayıları yanlış parse ediyordu
+            # İlk satırı kontrol et (header olabilir)
             header = next(reader)
-            try:
+            if not header[0].startswith('#') and not header[0].replace('.','',1).isdigit():
+                pass # Header ise bir şey yapma
+            elif header[0].replace('-','',1).replace('.','',1).isdigit():
+                # Sayı ise veridir, listeye ekle
                 self.cx.append(float(header[0]))
                 self.cy.append(float(header[1]))
-            except (ValueError, IndexError):
-                pass  # Gerçekten header/yorum satırıysa atla
             
             points = []
             for row in reader:
@@ -222,6 +222,11 @@ class Track:
         # İç ve dış sınırlar (Tek bir lejant ögesi olarak göstermek için sadece birine etiket veriyoruz)
         ax.plot(self.ix, self.iy, '-', color='black', linewidth=2, label='Pist Sınırları (Boundaries)')
         ax.plot(self.ox, self.oy, '-', color='black', linewidth=2)
+
+        # Optimal racing line (show_optimal=True ve hesaplanmışsa çiz)
+        if show_optimal and len(self.opt_x) > 0:
+            ax.plot(self.opt_x, self.opt_y, '-', color='#FF3366', linewidth=2,
+                    alpha=0.85, label='Optimal Racing Line')
         
         # Engelleri çiz (Fiziksel daire ve her ölçekte görünür olması için sabit boyutlu nokta işareti)
         for i, obs in enumerate(self.obstacles):
@@ -235,7 +240,7 @@ class Track:
         # Gerçekçi oranlar için eksenleri eşitliyoruz
         ax.set_aspect('equal')
         track_label = self.track_name if self.track_name else self.track_type.capitalize()
-        ax.set_title(f'Race Track — {track_label}')  # FIX: hardcoded başlık yerine dinamik isim
+        ax.set_title(f'Race Track — {track_label}')
         ax.set_xlabel('X [m]')
         ax.set_ylabel('Y [m]')
         ax.legend()
