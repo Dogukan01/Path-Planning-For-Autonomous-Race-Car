@@ -7,12 +7,13 @@ class TrackOptimizer:
     Minimum Eğrilik (Minimum Curvature) yöntemini kullanarak,
     virajları en düz (yumuşak) şekilde alacak çizgiyi bulur.
     """
-    def __init__(self, cx, cy, width, max_velocity, mu=1.0):
+    def __init__(self, cx, cy, width, max_velocity, mu=1.0, obstacles=None):
         """
         cx, cy: Merkez çizgi koordinatları
         width: Pist genişliği
         max_velocity: Araç için izin verilen maksimum düzlük hızı
         mu: Sürtünme katsayısı (Lastik tutunması)
+        obstacles: Piste eklenen engeller listesi
         """
         self.cx = np.array(cx)
         self.cy = np.array(cy)
@@ -20,6 +21,7 @@ class TrackOptimizer:
         self.width = width
         self.max_v = max_velocity
         self.mu = mu
+        self.obstacles = obstacles if obstacles else []
         self.g = 9.81
         
         # Merkez çizgisinden normalleri (dik vektörleri) hesapla
@@ -85,7 +87,24 @@ class TrackOptimizer:
         ddy = np.roll(y, -1) - 2 * y + np.roll(y, 1)
         
         # İkinci türevlerin (ivme/eğrilik potansiyeli) karesel toplamı
-        return np.sum(ddx**2 + ddy**2)
+        curvature_cost = np.sum(ddx**2 + ddy**2)
+        
+        # Engel Cezası (Obstacle Penalty)
+        obstacle_cost = 0.0
+        if self.obstacles:
+            for obs in self.obstacles:
+                # Her nokta ile engel arasındaki mesafe
+                dist_sq = (x - obs['x'])**2 + (y - obs['y'])**2
+                dist = np.sqrt(dist_sq)
+                
+                # Güvenlik mesafesi (engel yarıçapı + araç genişliği payı)
+                safe_dist = obs['radius'] + 2.0
+                
+                # Eğer yol engele güvenlik mesafesinden yakınsa yüksek ceza ver
+                violation = np.maximum(0, safe_dist - dist)
+                obstacle_cost += np.sum(violation**3) * 1000.0 # Kübik ceza, çok yaklaştıkça hızla artar
+                
+        return curvature_cost + obstacle_cost
         
     def generate_velocity_profile(self, opt_x, opt_y, a_max, brake_max):
         """

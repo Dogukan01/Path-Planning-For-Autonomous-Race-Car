@@ -26,6 +26,8 @@ class Track:
         self.opt_y = [] # Optimal line y
         self.opt_v = [] # Optimal velocity profile
         
+        self.obstacles = [] # List of obstacles {'x': float, 'y': float, 'radius': float}
+        
         self.generate_track()
 
     def generate_track(self):
@@ -127,12 +129,16 @@ class Track:
         self.ox = np.array(self.ox)
         self.oy = np.array(self.oy)
 
+    def add_obstacle(self, x, y, radius):
+        """Piste dairesel bir engel ekler."""
+        self.obstacles.append({'x': x, 'y': y, 'radius': radius})
+
     def optimize_track(self, max_v=85.0, a_max=12.0, brake_max=30.0, mu=1.0):
         """
         Pist merkez çizgisi ve sınırlarına dayanarak optimal yarış çizgisini
         ve hız profilini hesaplar.
         """
-        optimizer = TrackOptimizer(self.cx, self.cy, self.track_width, max_velocity=max_v, mu=mu)
+        optimizer = TrackOptimizer(self.cx, self.cy, self.track_width, max_velocity=max_v, mu=mu, obstacles=self.obstacles)
         self.opt_x, self.opt_y = optimizer.optimize_racing_line()
         self.opt_v = optimizer.generate_velocity_profile(self.opt_x, self.opt_y, a_max, brake_max)
         print("Hız profili oluşturuldu!")
@@ -152,6 +158,11 @@ class Track:
         # İç ve dış sınırlar (Tek bir lejant ögesi olarak göstermek için sadece birine etiket veriyoruz)
         ax.plot(self.ix, self.iy, '-', color='black', linewidth=2, label='Pist Sınırları (Boundaries)')
         ax.plot(self.ox, self.oy, '-', color='black', linewidth=2)
+        
+        # Engelleri çiz
+        for obs in self.obstacles:
+            circle = plt.Circle((obs['x'], obs['y']), obs['radius'], color='red', alpha=0.6)
+            ax.add_patch(circle)
         
         # Gerçekçi oranlar için eksenleri eşitliyoruz
         ax.set_aspect('equal')

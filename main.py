@@ -22,6 +22,11 @@ class SimulationApp:
     def __init__(self):
         self.visual_scale = 1.0
         self.track = Track(track_type='peanut', track_width=6.0, num_points=500)
+        
+        # Statik Engelleri Tam Pistin Üzerine Yerleştirme
+        self.track.add_obstacle(x=self.track.cx[120], y=self.track.cy[120], radius=1.0)
+        self.track.add_obstacle(x=self.track.cx[370], y=self.track.cy[370], radius=1.0)
+        
         self.track.optimize_track(max_v=30.0, a_max=8.0, brake_max=15.0)
         
         # Figür ve Eksenler
@@ -86,7 +91,17 @@ class SimulationApp:
         self.visual_scale = 1.0 
         self.track = Track(track_type=t_type, track_name=t_name, track_width=6.0, num_points=500)
         
-        # Seçilen piste göre limitleri belirle ve optimize et
+        # Seçilen piste göre tam yolun üzerine engeller yerleştiriyoruz
+        if t_type == 'peanut':
+            self.track.add_obstacle(x=self.track.cx[120], y=self.track.cy[120], radius=1.0)
+            self.track.add_obstacle(x=self.track.cx[370], y=self.track.cy[370], radius=1.0)
+        elif t_type == 'circle':
+            self.track.add_obstacle(x=self.track.cx[125], y=self.track.cy[125], radius=1.0)
+        elif t_type == 'api':
+            # F1 pistinde yarış çizgisini engellemek için tam yolun üzerine bir engel yerleştiriyoruz
+            mid_idx = self.track.num_points // 3
+            self.track.add_obstacle(x=self.track.cx[mid_idx], y=self.track.cy[mid_idx], radius=1.2)
+            
         max_v = 85.0 if t_type == 'api' else 30.0
         a_max = 12.0 if t_type == 'api' else 8.0
         b_max = 30.0 if t_type == 'api' else 15.0
