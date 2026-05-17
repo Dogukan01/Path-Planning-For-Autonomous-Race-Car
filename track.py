@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import urllib.request
 import csv
 import io
+from optimizer import TrackOptimizer
 
 class Track:
     """
@@ -20,6 +21,10 @@ class Track:
         self.iy = []  # Inner boundary y
         self.ox = []  # Outer boundary x
         self.oy = []  # Outer boundary y
+        
+        self.opt_x = [] # Optimal line x
+        self.opt_y = [] # Optimal line y
+        self.opt_v = [] # Optimal velocity profile
         
         self.generate_track()
 
@@ -122,7 +127,17 @@ class Track:
         self.ox = np.array(self.ox)
         self.oy = np.array(self.oy)
 
-    def plot_track(self, ax=None):
+    def optimize_track(self, max_v=85.0, a_max=12.0, brake_max=30.0, mu=1.0):
+        """
+        Pist merkez çizgisi ve sınırlarına dayanarak optimal yarış çizgisini
+        ve hız profilini hesaplar.
+        """
+        optimizer = TrackOptimizer(self.cx, self.cy, self.track_width, max_velocity=max_v, mu=mu)
+        self.opt_x, self.opt_y = optimizer.optimize_racing_line()
+        self.opt_v = optimizer.generate_velocity_profile(self.opt_x, self.opt_y, a_max, brake_max)
+        print("Hız profili oluşturuldu!")
+
+    def plot_track(self, ax=None, show_optimal=True):
         """
         Pisti görselleştirmek için kullanılır.
         """
@@ -134,6 +149,9 @@ class Track:
         # Merkez çizgi
         ax.plot(self.cx, self.cy, '--', color='gold', linewidth=2, label='Centerline')
         
+        if show_optimal and len(self.opt_x) > 0:
+            ax.plot(self.opt_x, self.opt_y, '-', color='lime', linewidth=2.5, label='Optimal Racing Line')
+            
         # İç ve dış sınırlar (Tek bir lejant ögesi olarak göstermek için sadece birine etiket veriyoruz)
         ax.plot(self.ix, self.iy, '-', color='black', linewidth=2, label='Pist Sınırları (Boundaries)')
         ax.plot(self.ox, self.oy, '-', color='black', linewidth=2)
@@ -151,5 +169,6 @@ class Track:
 
 if __name__ == '__main__':
     # Dosya doğrudan çalıştırıldığında test etmek için
-    track = Track(track_width=6.0)
+    track = Track(track_type='peanut', track_width=6.0)
+    track.optimize_track(max_v=30.0, a_max=5.0, brake_max=10.0)
     track.plot_track()

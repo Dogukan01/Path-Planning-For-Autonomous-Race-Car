@@ -80,3 +80,11 @@ class PurePursuitController:
         
         target_v = self.v_max - self.k_v * abs(alpha)
         return np.clip(target_v, self.v_min, self.v_max)
+
+    def get_profile_speed(self, target_idx, v_profile):
+        """
+        Önceden hesaplanmış (optimize edilmiş) hız profilinden hedef hızı döndürür.
+        """
+        if v_profile is None or len(v_profile) == 0:
+            return self.v_max
+        return v_profile[target_idx]

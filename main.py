@@ -22,6 +22,7 @@ class SimulationApp:
     def __init__(self):
         self.visual_scale = 1.0
         self.track = Track(track_type='peanut', track_width=6.0, num_points=500)
+        self.track.optimize_track(max_v=30.0, a_max=8.0, brake_max=15.0)
         
         # Figür ve Eksenler
         self.fig, self.ax = plt.subplots(figsize=(12, 9))
@@ -56,8 +57,8 @@ class SimulationApp:
         width = x_max - x_min
         self.ax.set_xlim(x_min, x_max + width * 0.8)
         
-        self.car_poly_s = plt.Polygon([[0,0]], closed=True, fill=True, color='red', alpha=0.7, label='Statik Araç')
-        self.car_poly_d = plt.Polygon([[0,0]], closed=True, fill=True, color='blue', alpha=0.7, label='Dinamik Araç')
+        self.car_poly_s = plt.Polygon([[0,0]], closed=True, fill=True, color='red', alpha=0.7, label='Baseline (Merkez)')
+        self.car_poly_d = plt.Polygon([[0,0]], closed=True, fill=True, color='lime', alpha=0.7, label='Optimal (Racing Line)')
         self.ax.add_patch(self.car_poly_s)
         self.ax.add_patch(self.car_poly_d)
         
@@ -89,6 +90,12 @@ class SimulationApp:
         self.visual_scale = 1.0 
         self.track = Track(track_type=t_type, track_name=t_name, track_width=6.0, num_points=500)
         
+        # Seçilen piste göre limitleri belirle ve optimize et
+        max_v = 85.0 if t_type == 'api' else 30.0
+        a_max = 12.0 if t_type == 'api' else 8.0
+        b_max = 30.0 if t_type == 'api' else 15.0
+        self.track.optimize_track(max_v=max_v, a_max=a_max, brake_max=b_max)
+        
         # Animasyonu durdur (Arka planın önbellekte kalmaması için)
         if hasattr(self, 'ani') and hasattr(self.ani, 'event_source') and self.ani.event_source:
             self.ani.event_source.stop()
@@ -109,8 +116,8 @@ class SimulationApp:
         ax_speed = plt.axes([0.15, 0.15, 0.65, 0.03])
         ax_ld = plt.axes([0.15, 0.1, 0.65, 0.03])
         
-        self.slider_speed = Slider(ax_speed, 'Statik Hız [m/s]', 2.0, 90.0, valinit=15.0)
-        self.slider_ld = Slider(ax_ld, 'Statik Ld [m]', 2.0, 15.0, valinit=6.0)
+        self.slider_speed = Slider(ax_speed, 'Baseline Hız [m/s]', 2.0, 90.0, valinit=15.0)
+        self.slider_ld = Slider(ax_ld, 'Baseline Ld [m]', 2.0, 15.0, valinit=6.0)
         
         # Butonlar
         ax_restart = plt.axes([0.15, 0.02, 0.15, 0.05])
@@ -143,15 +150,15 @@ class SimulationApp:
         if self.track.track_type == 'api':
             # F1 Ayarları (Hızlı Araçlar)
             self.controller_s = PurePursuitController(L=L, ld_min=init_ld, ld_k=0.0, v_max=init_v, v_min=init_v, k_v=0.0)
-            self.controller_d = PurePursuitController(L=L, ld_min=8.0, ld_k=0.5, v_max=85.0, v_min=15.0, k_v=60.0)
+            self.controller_d = PurePursuitController(L=L, ld_min=8.0, ld_k=0.5, v_max=85.0, v_min=15.0, k_v=0.0) # k_v 0 çünkü profile kullanıyor
             self.a_max = 12.0
             self.brake_max = 30.0
         else:
             # Standart Ayarlar
             self.controller_s = PurePursuitController(L=L, ld_min=init_ld, ld_k=0.0, v_max=init_v, v_min=init_v, k_v=0.0)
-            self.controller_d = PurePursuitController(L=L, ld_min=3.0, ld_k=0.5, v_max=15.0, v_min=5.0, k_v=15.0)
-            self.a_max = 5.0
-            self.brake_max = 10.0
+            self.controller_d = PurePursuitController(L=L, ld_min=3.0, ld_k=0.5, v_max=30.0, v_min=5.0, k_v=0.0)
+            self.a_max = 8.0
+            self.brake_max = 15.0
             
         self.history_s = create_history_dict()
         self.history_d = create_history_dict()
@@ -184,11 +191,10 @@ class SimulationApp:
         return (self.car_poly_s, self.car_poly_d, self.target_marker_s, 
                 self.target_marker_d, self.trajectory_line_s, self.trajectory_line_d, self.time_text)
 
-    def update_car(self, car, controller, history, target_v, lap_completed_key, last_idx_key):
+    def update_car(self, car, controller, history, target_v, lap_completed_key, last_idx_key, path_x, path_y):
         if self.state[lap_completed_key]:
             return None, None
             
-        # Gerçekçi ivmelenme/yavaşlama limitleri (m/s^2)
         # Gerçekçi ivmelenme/yavaşlama limitleri (m/s^2)
         a_max = self.a_max     
         brake_max = self.brake_max 
@@ -202,9 +208,9 @@ class SimulationApp:
         else:
             v_actual = target_v
             
-        target_idx, closest_idx = controller.search_target_index(car.x, car.y, self.track.cx, self.track.cy, v_actual)
-        target_x = self.track.cx[target_idx]
-        target_y = self.track.cy[target_idx]
+        target_idx, closest_idx = controller.search_target_index(car.x, car.y, path_x, path_y, v_actual)
+        target_x = path_x[target_idx]
+        target_y = path_y[target_idx]
         
         # Tur tamamlama kontrolü
         if self.frame_count > 50 and self.state[last_idx_key] > self.track.num_points - 50 and closest_idx < 50:
@@ -215,11 +221,11 @@ class SimulationApp:
         delta = controller.get_steering_angle(car.x, car.y, car.theta, target_x, target_y)
         car.update(v=v_actual, delta=delta, dt=DT)
         
-        next_idx = (closest_idx + 1) % self.track.num_points
-        track_theta = np.arctan2(self.track.cy[next_idx] - self.track.cy[closest_idx],
-                                 self.track.cx[next_idx] - self.track.cx[closest_idx])
-        dx_c = car.x - self.track.cx[closest_idx]
-        dy_c = car.y - self.track.cy[closest_idx]
+        next_idx = (closest_idx + 1) % len(path_x)
+        track_theta = np.arctan2(path_y[next_idx] - path_y[closest_idx],
+                                 path_x[next_idx] - path_x[closest_idx])
+        dx_c = car.x - path_x[closest_idx]
+        dy_c = car.y - path_y[closest_idx]
         cte = -dx_c * np.sin(track_theta) + dy_c * np.cos(track_theta)
         
         history['t'].append(self.frame_count * DT)
@@ -244,23 +250,21 @@ class SimulationApp:
         # F1 pisti için araç ve sınır çizgileri görsel olarak ölçeklendirildi.
         # Bu yüzden kamera takibine gerek kalmadı ve blitting açık kalarak performansı artırdı.
         
-        # Statik aracın hızı ve Ld'si UI üzerinden HER ADIMDA okunur (Canlı değişiklik için)
+        # Baseline (Merkez) aracın hızı ve Ld'si UI üzerinden HER ADIMDA okunur (Canlı değişiklik için)
         v_s = self.slider_speed.val
         self.controller_s.ld_min = self.slider_ld.val
         
-        # Statik Aracı Güncelle
-        tx_s, ty_s = self.update_car(self.car_s, self.controller_s, self.history_s, v_s, 'lap_completed_s', 'last_closest_idx_s')
+        # Baseline Aracı Güncelle
+        tx_s, ty_s = self.update_car(self.car_s, self.controller_s, self.history_s, v_s, 'lap_completed_s', 'last_closest_idx_s', self.track.cx, self.track.cy)
         
-        # Dinamik Aracı Güncelle
-        # 1. Önceki hız ile hedef noktasını bul (İlk adımda varsayılan hız 10.0 m/s)
+        # Optimal (Dinamik) Aracı Güncelle
         prev_v_d = self.history_d['v'][-1] if len(self.history_d['v']) > 0 else 10.0
-        tmp_idx, _ = self.controller_d.search_target_index(self.car_d.x, self.car_d.y, self.track.cx, self.track.cy, prev_v_d)
+        tmp_idx, _ = self.controller_d.search_target_index(self.car_d.x, self.car_d.y, self.track.opt_x, self.track.opt_y, prev_v_d)
         
-        # 2. O noktaya olan açıya göre yeni hızı hesapla
-        v_d = self.controller_d.get_target_speed(self.car_d.x, self.car_d.y, self.car_d.theta, self.track.cx[tmp_idx], self.track.cy[tmp_idx])
+        # Yeni hızı optimize edilmiş profilden al
+        v_d = self.controller_d.get_profile_speed(tmp_idx, self.track.opt_v)
 
-        # 3. Aracı güncelle (Bu sırada kendi search_target_index işlemini yeni hızla yapacak)
-        tx_d, ty_d = self.update_car(self.car_d, self.controller_d, self.history_d, v_d, 'lap_completed_d', 'last_closest_idx_d')
+        tx_d, ty_d = self.update_car(self.car_d, self.controller_d, self.history_d, v_d, 'lap_completed_d', 'last_closest_idx_d', self.track.opt_x, self.track.opt_y)
         
         # Çizimleri Uygula
         if not self.state['lap_completed_s']:
@@ -275,10 +279,10 @@ class SimulationApp:
             
         # Bilgi Metni
         status_text = f"Time: {t:.1f} s\n"
-        status_text += f"Statik - Hız: {v_s:.1f} m/s, Ld: {self.controller_s.current_ld:.1f} m"
+        status_text += f"Baseline - Hız: {v_s:.1f} m/s, Ld: {self.controller_s.current_ld:.1f} m"
         if self.state['lap_completed_s']: status_text += " (BİTTİ)"
         status_text += "\n"
-        status_text += f"Dinamik - Hız: {v_d:.1f} m/s, Ld: {self.controller_d.current_ld:.1f} m"
+        status_text += f"Optimal - Hız: {v_d:.1f} m/s, Ld: {self.controller_d.current_ld:.1f} m"
         if self.state['lap_completed_d']: status_text += " (BİTTİ)"
         
         self.time_text.set_text(status_text)
