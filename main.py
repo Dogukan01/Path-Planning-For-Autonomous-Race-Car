@@ -57,11 +57,11 @@ class SimulationApp:
         width = x_max - x_min
         self.ax.set_xlim(x_min, x_max + width * 0.8)
         
-        self.car_poly = plt.Polygon([[0,0]], closed=True, fill=True, color='lime', alpha=0.7, label='Optimal (Racing Line)')
+        self.car_poly = plt.Polygon([[0,0]], closed=True, fill=True, color='#FF3366', alpha=0.9, label='Optimal (Racing Line)')
         self.ax.add_patch(self.car_poly)
         
-        self.target_marker, = self.ax.plot([], [], 'bx', markersize=8)
-        self.trajectory_line, = self.ax.plot([], [], 'b-', linewidth=1.0, alpha=0.5)
+        self.target_marker, = self.ax.plot([], [], marker='x', color='#FF3366', markersize=8)
+        self.trajectory_line, = self.ax.plot([], [], linestyle='-', color='#FF3366', linewidth=1.5, alpha=0.5)
         
         self.time_text = self.ax.text(0.98, 0.98, '', transform=self.ax.transAxes, fontsize=11, fontweight='bold',
                                       horizontalalignment='right', verticalalignment='top',
@@ -132,12 +132,12 @@ class SimulationApp:
         
         if self.track.track_type == 'api':
             # F1 Ayarları (Hızlı Araçlar)
-            self.controller = PurePursuitController(L=L, ld_min=8.0, ld_k=0.5, v_max=85.0, v_min=15.0, k_v=0.0) # k_v 0 çünkü profile kullanıyor
+            self.controller = PurePursuitController(L=L, ld_min=4.0, ld_k=0.15, v_max=85.0, v_min=15.0, k_v=0.0) # Corner cutting önlemek için ld_k 0.15 yapıldı
             self.a_max = 12.0
             self.brake_max = 30.0
         else:
             # Standart Ayarlar
-            self.controller = PurePursuitController(L=L, ld_min=3.0, ld_k=0.5, v_max=30.0, v_min=5.0, k_v=0.0)
+            self.controller = PurePursuitController(L=L, ld_min=3.0, ld_k=0.1, v_max=30.0, v_min=5.0, k_v=0.0)
             self.a_max = 8.0
             self.brake_max = 15.0
             

@@ -47,8 +47,9 @@ class TrackOptimizer:
         alpha0 = np.zeros(self.n)
         
         # Sınır kısıtlamaları: alpha değeri pist genişliğinin dışına çıkamaz.
-        # Güvenlik marjı bırakıyoruz (genişliğin %90'ı)
-        margin = (self.width / 2.0) * 0.90 
+        # Aracın kendi genişliği de olduğu için pistin tam kenarına kadar gidemeyiz.
+        # Pist yarı genişliği - araç yarı genişliği (yaklaşık 1.0m) - güvenlik payı (0.2m)
+        margin = max(0.1, (self.width / 2.0) - 1.2)
         bounds = [(-margin, margin) for _ in range(self.n)]
         
         # Optimizasyon (L-BFGS-B algoritması hızlıdır ve sınır kısıtlamalarını destekler)
