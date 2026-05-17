@@ -87,11 +87,13 @@ class SimulationApp:
         t_type, t_name = track_mapping[label]
         
         # Track'i yeniden oluştur
-        self.visual_scale = 1.0 
         self.track = Track(track_type=t_type, track_name=t_name, track_width=6.0, num_points=500)
         
-        # Her pist için 3 adet rastgele engel oluştur (F1 pistleri dahil)
-        self.track.generate_random_obstacles(count=3, radius=1.0 if t_type != 'api' else 1.2)
+        # Her pist için engelleri oluştur (F1 pistleri için 6 adet, diğerleri için 3 adet)
+        if t_type == 'api':
+            self.track.generate_random_obstacles(count=6, radius=1.5)
+        else:
+            self.track.generate_random_obstacles(count=3, radius=1.0)
             
         max_v = 85.0 if t_type == 'api' else 30.0
         a_max = 12.0 if t_type == 'api' else 8.0
@@ -137,15 +139,19 @@ class SimulationApp:
         self.car = Car(x=self.start_x, y=self.start_y, theta=self.start_theta, L=L)
         
         if self.track.track_type == 'api':
-            # F1 Ayarları (Hızlı Araçlar)
+            # F1 Ayarları (Hızlı Araçlar - Dinamik Model Aktif)
             self.controller = PurePursuitController(L=L, ld_min=4.0, ld_k=0.15, v_max=85.0, v_min=15.0, k_v=0.0) # Corner cutting önlemek için ld_k 0.15 yapıldı
             self.a_max = 12.0
             self.brake_max = 30.0
+            self.car_mode = 'dynamic'
+            self.visual_scale = 2.0 # F1 pistlerinde araç yakınlaştırıldığında da gerçekçi boyutta görünsün (2.0x)
         else:
-            # Standart Ayarlar
+            # Standart Ayarlar (Düşük hızlar - Kinematik Model)
             self.controller = PurePursuitController(L=L, ld_min=3.0, ld_k=0.1, v_max=30.0, v_min=5.0, k_v=0.0)
             self.a_max = 8.0
             self.brake_max = 15.0
+            self.car_mode = 'kinematic'
+            self.visual_scale = 1.5 # Standart pistlerde biraz daha büyük çizilsin
             
         self.history = create_history_dict()
         
@@ -200,7 +206,7 @@ class SimulationApp:
         self.state[last_idx_key] = closest_idx
         
         delta = controller.get_steering_angle(car.x, car.y, car.theta, target_x, target_y)
-        car.update(v=v_actual, delta=delta, dt=DT)
+        car.update(v=v_actual, delta=delta, dt=DT, mode=self.car_mode)
         
         next_idx = (closest_idx + 1) % len(path_x)
         track_theta = np.arctan2(path_y[next_idx] - path_y[closest_idx],

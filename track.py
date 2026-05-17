@@ -42,13 +42,27 @@ class Track:
             self._generate_peanut()
 
     def _fetch_from_api(self):
-        """TUMFTM Racetrack Database API'sinden gerçek pist verisini çeker."""
-        url = f"https://raw.githubusercontent.com/TUMFTM/racetrack-database/master/tracks/{self.track_name}.csv"
+        """TUMFTM Racetrack Database API'sinden gerçek pist verisini çeker ve yerel önbelleğe (cache) kaydeder."""
+        import os
+        cache_dir = "cache"
+        cache_file = os.path.join(cache_dir, f"{self.track_name}.csv")
+        
         try:
-            print(f"[{self.track_name}] pist verisi API'den indiriliyor...")
-            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-            with urllib.request.urlopen(req) as response:
-                csv_data = response.read().decode('utf-8')
+            if os.path.exists(cache_file):
+                print(f"[{self.track_name}] pist verisi yerel önbellekten (cache) yükleniyor...")
+                with open(cache_file, 'r', encoding='utf-8') as f:
+                    csv_data = f.read()
+            else:
+                url = f"https://raw.githubusercontent.com/TUMFTM/racetrack-database/master/tracks/{self.track_name}.csv"
+                print(f"[{self.track_name}] pist verisi API'den indiriliyor...")
+                req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+                with urllib.request.urlopen(req) as response:
+                    csv_data = response.read().decode('utf-8')
+                
+                # Önbellek dizinini oluştur ve dosyayı kaydet
+                os.makedirs(cache_dir, exist_ok=True)
+                with open(cache_file, 'w', encoding='utf-8') as f:
+                    f.write(csv_data)
                 
             reader = csv.reader(io.StringIO(csv_data))
             # İlk satırı kontrol et (header olabilir)
@@ -209,10 +223,18 @@ class Track:
         ax.plot(self.ix, self.iy, '-', color='black', linewidth=2, label='Pist Sınırları (Boundaries)')
         ax.plot(self.ox, self.oy, '-', color='black', linewidth=2)
         
-        # Engelleri çiz
-        for obs in self.obstacles:
-            circle = plt.Circle((obs['x'], obs['y']), obs['radius'], color='red', alpha=0.6)
+        # Optimal Yarış Çizgisi (Racing Line - Pembe noktalı çizgi)
+        if show_optimal and len(self.opt_x) > 0:
+            ax.plot(self.opt_x, self.opt_y, ':', color='#FF3366', linewidth=2.5, label='Optimal Yarış Çizgisi (Racing Line)')
+        
+        # Engelleri çiz (Fiziksel daire ve her ölçekte görünür olması için sabit boyutlu nokta işareti)
+        for i, obs in enumerate(self.obstacles):
+            # Fiziksel boyut dairesi
+            circle = plt.Circle((obs['x'], obs['y']), obs['radius'], color='red', alpha=0.4)
             ax.add_patch(circle)
+            # Uzaktan bile görünmesini sağlayan sabit boyutlu işaretçi (markersize)
+            ax.plot(obs['x'], obs['y'], marker='o', color='red', markersize=8, alpha=0.8,
+                    label='Engel (Obstacle)' if i == 0 else "")
         
         # Gerçekçi oranlar için eksenleri eşitliyoruz
         ax.set_aspect('equal')

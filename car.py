@@ -23,6 +23,19 @@ class Car:
         self.width = width
         self.length = length
         
+        # Dinamik Model Durum Değişkenleri
+        self.v_x = 0.0
+        self.v_y = 0.0
+        self.r = 0.0 # Yaw rate (yalpalama oranı)
+        
+        # Fiziksel Parametreler (Dinamik Model İçin)
+        self.m = 1500.0           # Kütle [kg]
+        self.Iz = 3000.0          # Z ekseni etrafında atalet momenti [kg*m^2]
+        self.lf = 1.2             # Ağırlık merkezinin ön aksa uzaklığı [m]
+        self.lr = self.L - self.lf # Ağırlık merkezinin arka aksa uzaklığı [m]
+        self.Cf = 150000.0        # Ön lastik viraj sertliği (Cornering Stiffness) [N/rad]
+        self.Cr = 150000.0        # Arka lastik viraj sertliği (Cornering Stiffness) [N/rad]
+        
     def get_corners(self, visual_scale=1.0):
         """
         Aracın dikdörtgen modelini çizmek için dört köşesinin koordinatlarını hesaplar.
@@ -50,21 +63,45 @@ class Car:
         
         return rotated_corners
         
-    def update(self, v, delta, dt):
+    def update(self, v, delta, dt, mode='dynamic'):
         """
         Aracın durumunu (state) dt zaman adımı kadar günceller.
-        
-        v: Araç hızı [m/s]
-        delta: Direksiyon açısı [radyan]
-        dt: Zaman adımı [s]
+        Düşük hızlarda kinematik model, yüksek hızlarda dinamik model kullanılır.
         """
-        # Direksiyon açısını sınırlandır
         delta = np.clip(delta, -self.max_steer, self.max_steer)
         
-        # Kinematik Bisiklet Modeli diferansiyel denklemleri (Euler metodu ile integrasyon)
-        self.x += v * np.cos(self.theta) * dt
-        self.y += v * np.sin(self.theta) * dt
-        self.theta += (v / self.L) * np.tan(delta) * dt
-        
-        # Açıyı [-pi, pi] aralığında tut (Normalizasyon)
+        if mode == 'kinematic' or v < 3.0:
+            # Kinematik Model
+            self.x += v * np.cos(self.theta) * dt
+            self.y += v * np.sin(self.theta) * dt
+            self.theta += (v / self.L) * np.tan(delta) * dt
+            
+            self.v_x = v
+            self.v_y = 0.0
+            self.r = (v / self.L) * np.tan(delta)
+        else:
+            # Dinamik Model (Linear Tire Model)
+            self.v_x = v # İleri yönlü hızın hedef hıza eşit kontrol edildiğini varsayıyoruz
+            
+            # Kayma açıları (Slip angles)
+            alpha_f = delta - np.arctan2(self.v_y + self.lf * self.r, self.v_x)
+            alpha_r = -np.arctan2(self.v_y - self.lr * self.r, self.v_x)
+            
+            # Yanal lastik kuvvetleri
+            F_yf = self.Cf * alpha_f
+            F_yr = self.Cr * alpha_r
+            
+            # Diferansiyel hareket denklemleri
+            v_y_dot = (F_yf * np.cos(delta) + F_yr) / self.m - self.v_x * self.r
+            r_dot = (self.lf * F_yf * np.cos(delta) - self.lr * F_yr) / self.Iz
+            
+            # Euler İntegrasyonu (Durumları güncelle)
+            self.v_y += v_y_dot * dt
+            self.r += r_dot * dt
+            
+            # Global koordinatlara çevir ve güncelle
+            self.x += (self.v_x * np.cos(self.theta) - self.v_y * np.sin(self.theta)) * dt
+            self.y += (self.v_x * np.sin(self.theta) + self.v_y * np.cos(self.theta)) * dt
+            self.theta += self.r * dt
+            
         self.theta = (self.theta + np.pi) % (2 * np.pi) - np.pi
