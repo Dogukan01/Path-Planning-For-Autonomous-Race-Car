@@ -219,7 +219,7 @@ class Track:
         # Merkez Çizgi (Kesikli)
         ax.plot(self.cx, self.cy, '--', color='gray', linewidth=1.5, alpha=0.7, label='Centerline')
             
-        # İç ve dış sınırlar (Tek bir lejant ögesi olarak göstermek için sadece birine etiket veriyoruz)
+        # Sınırları tekrar açık tema için Siyah (black) yapıyoruz
         ax.plot(self.ix, self.iy, '-', color='black', linewidth=2, label='Pist Sınırları (Boundaries)')
         ax.plot(self.ox, self.oy, '-', color='black', linewidth=2)
 

@@ -2,6 +2,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from matplotlib.widgets import Slider, Button, RadioButtons
+from matplotlib.collections import LineCollection
+
+# Aydınlık / Orijinal temaya geri dönüş
+plt.style.use('default')
 
 from track import Track
 from car import Car
@@ -16,19 +20,26 @@ TRAJ_LIMIT = 300
 def create_history_dict():
     return {
         't': [], 'x': [], 'y': [], 'theta': [],
-        'cte': [], 'steer': [], 'v': [], 'ld': []
+        'cte': [], 'steer': [], 'v': [], 'ld': [], 'g_force': []
     }
 
 class SimulationApp:
     def __init__(self):
         self.visual_scale = 1.0
         self.selected_controller_type = 'mpc'
-        self.zoom_mode = 'fit'
-        self.zoom_size = 150.0
+        self.zoom_mode = 'follow'  # Varsayılan olarak aracı çok yakından takip etsin
+        self.zoom_size = 50.0      # Yakın çekim başlangıç değeri
         self._ani = None  # Animasyon referansını sakla (GC uyarısını engelle)
         
-        self.fig, self.ax = plt.subplots(figsize=(12, 9))
-        plt.subplots_adjust(bottom=0.3, right=0.8)
+        self.fig = plt.figure(figsize=(16, 9))
+        
+        # Pist Ekseni (Sol Taraf)
+        self.ax = self.fig.add_axes([0.03, 0.20, 0.62, 0.75])
+        
+        # Canlı Analiz Eksenleri (Sağ Taraf) - Yükseklik 0.20'ye düşürülüp aralarındaki boşluk açıldı
+        self.ax_cte = self.fig.add_axes([0.72, 0.70, 0.25, 0.20])
+        self.ax_steer = self.fig.add_axes([0.72, 0.40, 0.25, 0.20])
+        self.ax_ld = self.fig.add_axes([0.72, 0.10, 0.25, 0.20])
         
         # İlk pist
         self.track = Track(track_type='peanut', track_width=6.0, num_points=500)
@@ -88,16 +99,28 @@ class SimulationApp:
         self.track.plot_track(ax=self.ax)
         
         # Araba - geçerli başlangıç noktası (tek nokta değil)
-        init_corners = self._get_dummy_corners(self.start_x, self.start_y, self.start_theta)
+        v_scale = 5.0 if self.track.track_type == 'api' else 1.2  # Araç boyutunu daha gerçekçi bir orana çektik
+        dummy_car = Car(x=self.start_x, y=self.start_y, theta=self.start_theta, L=L)
+        init_corners = dummy_car.get_corners(visual_scale=v_scale)
         self.car_poly = plt.Polygon(
             init_corners,
-            closed=True, fill=True, facecolor='#00D2FF', alpha=0.95, 
-            edgecolor='black', linewidth=1.5, label='Araç'
+            closed=True, fill=True, facecolor='#E30022', alpha=0.95,   # Ferrari F1 Kırmızısı
+            edgecolor='black', linewidth=1.5, label='F1 Aracı'
         )
         self.ax.add_patch(self.car_poly)
         
         self.target_marker, = self.ax.plot([], [], marker='x', color='#FF3366', markersize=10, markeredgewidth=2)
-        self.trajectory_line, = self.ax.plot([], [], linestyle='-', color='#FF3366', linewidth=2, alpha=0.6)
+        
+        # Heatmap Yörünge İzi (Hıza Göre Renklenecek LineCollection)
+        self.trajectory_line = LineCollection([], cmap='turbo', linewidths=3.0, alpha=0.9)
+        self.ax.add_collection(self.trajectory_line)
+        
+        # Otonom Araç LIDAR / Sensör Görselleştirmesi
+        self.lidar_lines = []
+        for _ in range(7):  # 7 adet tarama ışını
+            line, = self.ax.plot([], [], color='orange', alpha=0.4, linewidth=1.2, linestyle='--')
+            self.lidar_lines.append(line)
+        
         self.mpc_pred_line, = self.ax.plot([], [], linestyle='--', color='#33FF66', linewidth=2.5, label='MPC Öngörü')
         
         self.time_text = self.ax.text(1.02, 0.65, '', transform=self.ax.transAxes, fontsize=10, fontweight='bold',
@@ -108,34 +131,50 @@ class SimulationApp:
         title_text = f'Otonom Araç Yörünge Takibi: {self.track.track_name or self.track.track_type.capitalize()}'
         self.ax.set_title(title_text, pad=15, fontweight='bold')
 
+        # Analiz Grafikleri Hazırlığı
+        self.ax_cte.clear()
+        self.line_cte, = self.ax_cte.plot([], [], 'lime', linewidth=2)
+        self.ax_cte.axhline(0, color='k', linestyle='--', alpha=0.5)
+        self.ax_cte.set_title('Yörüngeden Sapma Hatası (CTE)')
+        self.ax_cte.set_ylabel('Hata [m]')
+        self.ax_cte.grid(True, linestyle=':', alpha=0.8)
+        self.ax_cte.tick_params(labelbottom=False)
+
+        self.ax_steer.clear()
+        self.line_steer, = self.ax_steer.plot([], [], 'lime', linewidth=2)
+        self.ax_steer.axhline(0, color='k', linestyle='--', alpha=0.5)
+        self.ax_steer.set_title('Direksiyon Açısı')
+        self.ax_steer.set_ylabel('Açı [Derece]')
+        self.ax_steer.grid(True, linestyle=':', alpha=0.8)
+        self.ax_steer.tick_params(labelbottom=False)
+
+        self.ax_ld.clear()
+        self.line_ld, = self.ax_ld.plot([], [], 'lime', linewidth=2)
+        self.ax_ld.set_title('İleri Bakma Mesafesi (Ld)')
+        self.ax_ld.set_xlabel('Zaman [s]')
+        self.ax_ld.set_ylabel('Ld [m]')
+        self.ax_ld.grid(True, linestyle=':', alpha=0.8)
+
         all_x = np.concatenate([self.track.ix, self.track.ox, self.track.cx])
         all_y = np.concatenate([self.track.iy, self.track.oy, self.track.cy])
-        margin = 30.0
+        
+        # Daha geniş bir fit görünümü için x ve y aralıklarını hesaplayıp dinamik margin verelim
+        width = np.max(all_x) - np.min(all_x)
+        height = np.max(all_y) - np.min(all_y)
+        margin_x = max(30.0, width * 0.15)
+        margin_y = max(30.0, height * 0.15)
         
         self.track_bounds = {
-            'xmin': np.min(all_x) - margin,
-            'xmax': np.max(all_x) + margin,
-            'ymin': np.min(all_y) - margin,
-            'ymax': np.max(all_y) + margin
+            'xmin': np.min(all_x) - margin_x,
+            'xmax': np.max(all_x) + margin_x,
+            'ymin': np.min(all_y) - margin_y,
+            'ymax': np.max(all_y) + margin_y
         }
         
         if self.track.track_type == 'api':
-            self.zoom_size = 400.0
+            self.zoom_size = 60.0  # F1 haritalarında 120m genişliğinde çok detaylı yakın çekim
         else:
-            self.zoom_size = 120.0
-
-    def _get_dummy_corners(self, x, y, theta):
-        """Geçerli bir polygon oluşturmak için dummy köşeler."""
-        L_car = 4.0 * (4.0 if hasattr(self, 'track') and self.track.track_type == 'api' else 1.0)
-        W_car = 2.0 * (4.0 if hasattr(self, 'track') and self.track.track_type == 'api' else 1.0)
-        cos_t = np.cos(theta)
-        sin_t = np.sin(theta)
-        return np.array([
-            [x + 0.75*L_car*cos_t - W_car*sin_t, y + 0.75*L_car*sin_t + W_car*cos_t],
-            [x + 0.75*L_car*cos_t + W_car*sin_t, y + 0.75*L_car*sin_t - W_car*cos_t],
-            [x - 0.25*L_car*cos_t + W_car*sin_t, y - 0.25*L_car*sin_t - W_car*cos_t],
-            [x - 0.25*L_car*cos_t - W_car*sin_t, y - 0.25*L_car*sin_t + W_car*cos_t]
-        ])
+            self.zoom_size = 25.0  # Ufak haritalarda daha dar bir çerçeve
 
     def on_track_changed(self, label):
         track_mapping = {
@@ -173,27 +212,23 @@ class SimulationApp:
         
         # Yeni animasyon başlat
         self._start_animation()
+        self.fig.canvas.draw_idle()
 
     def setup_ui(self):
-        ax_restart = plt.axes([0.15, 0.02, 0.15, 0.05])
-        ax_analysis = plt.axes([0.35, 0.02, 0.15, 0.05])
-        
+        ax_restart = plt.axes([0.05, 0.05, 0.1, 0.05])
         self.btn_restart = Button(ax_restart, 'Yeniden Başlat', color='lightgoldenrodyellow', hovercolor='0.975')
-        self.btn_analysis = Button(ax_analysis, 'Analizi Göster', color='lightblue', hovercolor='0.975')
-        
         self.btn_restart.on_clicked(self.on_restart_clicked)
-        self.btn_analysis.on_clicked(self.on_analysis_clicked)
 
-        ax_zoom = plt.axes([0.55, 0.02, 0.15, 0.05])
-        self.btn_zoom = Button(ax_zoom, 'Zoom Modu: Fit', color='lightgreen', hovercolor='0.975')
+        ax_zoom = plt.axes([0.17, 0.05, 0.12, 0.05])
+        self.btn_zoom = Button(ax_zoom, 'Kamera: Pist Tümü', color='lightgreen', hovercolor='0.975')
         self.btn_zoom.on_clicked(self.on_zoom_clicked)
         
-        ax_radio = plt.axes([0.82, 0.35, 0.15, 0.25])
+        ax_radio = plt.axes([0.33, 0.02, 0.15, 0.11])
         ax_radio.set_title('Pist Seçimi', fontweight='bold')
         self.radio_track = RadioButtons(ax_radio, ('Fıstık (Varsayılan)', 'Yuvarlak (Test)', 'Monza (F1)', 'Silverstone (F1)', 'Catalunya (F1)'))
         self.radio_track.on_clicked(self.on_track_changed)
         
-        ax_ctrl_radio = plt.axes([0.82, 0.15, 0.15, 0.15])
+        ax_ctrl_radio = plt.axes([0.50, 0.02, 0.15, 0.11])
         ax_ctrl_radio.set_title('Kontrolcü Seçimi', fontweight='bold')
         self.radio_ctrl = RadioButtons(ax_ctrl_radio, ('MPC (Phase 3)', 'Pure Pursuit'))
         self.radio_ctrl.on_clicked(self.on_controller_changed)
@@ -233,7 +268,7 @@ class SimulationApp:
                 self.brake_max = 15.0
                 self.car_mode = 'kinematic'
         
-        self.visual_scale = 4.0 if self.track.track_type == 'api' else 1.0
+        self.visual_scale = 5.0 if self.track.track_type == 'api' else 1.2
             
         self.history = create_history_dict()
         self.state = {'last_closest_idx': 0, 'lap_completed': False}
@@ -241,12 +276,6 @@ class SimulationApp:
 
     def on_restart_clicked(self, event):
         self.reset_simulation()
-
-    def on_analysis_clicked(self, event):
-        if len(self.history['t']) > 0:
-            plot_analysis(self.history)
-        else:
-            print("Henüz kaydedilmiş veri yok.")
 
     def on_zoom_clicked(self, event):
         if self.zoom_mode == 'fit':
@@ -276,11 +305,13 @@ class SimulationApp:
         if hasattr(self, 'car') and self.car is not None:
             self.car_poly.set_xy(self.car.get_corners(self.visual_scale))
         self.target_marker.set_data([], [])
-        self.trajectory_line.set_data([], [])
+        self.trajectory_line.set_segments([])
+        for line in self.lidar_lines:
+            line.set_data([], [])
         self.mpc_pred_line.set_data([], [])
         self.time_text.set_text('Başlatılıyor...')
         self._apply_zoom()
-        return (self.car_poly, self.target_marker, self.trajectory_line, self.time_text, self.mpc_pred_line)
+        return [self.car_poly, self.target_marker, self.trajectory_line, self.time_text, self.mpc_pred_line] + self.lidar_lines
 
     def update_car(self, car, controller, history, target_v, lap_completed_key, last_idx_key, path_x, path_y):
         if self.state[lap_completed_key]:
@@ -315,6 +346,11 @@ class SimulationApp:
         self.state[last_idx_key] = closest_idx
         car.update(v=v_actual, delta=delta, dt=DT, mode=self.car_mode)
         
+        # Gerçekçi G-Kuvveti Hesaplaması
+        a_long = (v_actual - v_current) / DT
+        a_lat = v_actual * car.r
+        g_force = np.sqrt(a_long**2 + a_lat**2) / 9.81
+        
         next_idx = (closest_idx + 1) % len(path_x)
         track_theta = np.arctan2(path_y[next_idx] - path_y[closest_idx],
                                  path_x[next_idx] - path_x[closest_idx])
@@ -330,6 +366,7 @@ class SimulationApp:
         history['steer'].append(delta)
         history['v'].append(v_actual)
         history['ld'].append(controller.current_ld if hasattr(controller, 'current_ld') else 0.0)
+        history['g_force'].append(g_force)
         
         return target_x, target_y
 
@@ -355,30 +392,61 @@ class SimulationApp:
             if tx is not None:
                 self.target_marker.set_data([tx], [ty])
             
-            if len(self.history['x']) > TRAJ_LIMIT:
-                self.trajectory_line.set_data(self.history['x'][-TRAJ_LIMIT:], self.history['y'][-TRAJ_LIMIT:])
-            else:
-                self.trajectory_line.set_data(self.history['x'], self.history['y'])
+            # Heatmap Yörünge İzi (LineCollection) Güncellemesi
+            x_hist = self.history['x'][-TRAJ_LIMIT:]
+            y_hist = self.history['y'][-TRAJ_LIMIT:]
+            v_hist = self.history['v'][-TRAJ_LIMIT:]
+            
+            if len(x_hist) > 1:
+                points = np.array([x_hist, y_hist]).T.reshape(-1, 1, 2)
+                segments = np.concatenate([points[:-1], points[1:]], axis=1)
+                self.trajectory_line.set_segments(segments)
+                self.trajectory_line.set_array(np.array(v_hist[:-1]))
+                # Renklendirmeyi pistin maksimum hızına göre dağıt (mavi=yavaş, kırmızi=hızlı)
+                max_track_v = 85.0 if self.track.track_type == 'api' else 30.0
+                self.trajectory_line.set_clim(0, max_track_v)
             
             if isinstance(self.controller, MPCController) and hasattr(self.controller, 'pred_x'):
                 self.mpc_pred_line.set_data(self.controller.pred_x, self.controller.pred_y)
             else:
                 self.mpc_pred_line.set_data([], [])
+
+            v_act_temp = self.history['v'][-1] if len(self.history['v']) > 0 else v_d
+
+            # Dinamik Lidar Sensör Işınlarını (Rays) Güncelle
+            ray_length = min(30.0, v_act_temp * 1.5 + 10.0) # Hıza göre uzağı tara
+            angles = np.linspace(-np.pi/3, np.pi/3, len(self.lidar_lines)) + self.car.theta
+            for i, angle in enumerate(angles):
+                rx = self.car.x + ray_length * np.cos(angle)
+                ry = self.car.y + ray_length * np.sin(angle)
+                self.lidar_lines[i].set_data([self.car.x, rx], [self.car.y, ry])
             
         v_act = self.history['v'][-1] if len(self.history['v']) > 0 else v_d
-        status_text = f"Time: {t:.1f} s\n"
+        g_val = self.history['g_force'][-1] if len(self.history['g_force']) > 0 else 0.0
+        
+        status_text = f"Zaman: {t:.1f} s | Hız: {v_act:.1f} m/s | G-Kuvveti: {g_val:.2f} G\n"
         if isinstance(self.controller, MPCController):
-            status_text += f"Hız: {v_act:.1f} m/s (MPC)"
+            status_text += f"Kontrolcü: MPC (Model Predictive Control)"
         else:
-            status_text += f"Hız: {v_act:.1f} m/s, Ld: {self.controller.current_ld:.1f} m (PP)"
+            status_text += f"Kontrolcü: Pure Pursuit (Ld: {self.controller.current_ld:.1f} m)"
             
-        if self.state['lap_completed']: status_text += " (BİTTİ)"
+        if self.state['lap_completed']: status_text += "\n[LAP COMPLETED]"
         
         self.time_text.set_text(status_text)
         self.frame_count += 1
         self._apply_zoom()
+
+        if self.frame_count % 5 == 0 and len(self.history['t']) > 0:
+            t_data = self.history['t']
+            self.line_cte.set_data(t_data, self.history['cte'])
+            self.line_steer.set_data(t_data, np.degrees(self.history['steer']))
+            self.line_ld.set_data(t_data, self.history['ld'])
+            
+            for ax in [self.ax_cte, self.ax_steer, self.ax_ld]:
+                ax.relim()
+                ax.autoscale_view()
         
-        return (self.car_poly, self.target_marker, self.trajectory_line, self.time_text, self.mpc_pred_line)
+        return [self.car_poly, self.target_marker, self.trajectory_line, self.time_text, self.mpc_pred_line] + self.lidar_lines
 
 if __name__ == '__main__':
     print("Simülasyon UI Modunda başlatılıyor...")

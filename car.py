@@ -38,19 +38,49 @@ class Car:
         
     def get_corners(self, visual_scale=1.0):
         """
-        Aracın dikdörtgen modelini çizmek için dört köşesinin koordinatlarını hesaplar.
-        Görsel ölçekleme eklendi (F1 pistlerinde aracın çok küçük kalmasını engellemek için).
+        F1 Aracı görünümü için detaylı poligon köşelerini hesaplar.
         """
-        front_length = self.length * 0.75 * visual_scale
-        rear_length = self.length * 0.25 * visual_scale
-        w = (self.width / 2.0) * visual_scale
+        L = self.length * visual_scale
+        W = self.width * visual_scale
+
+        # F1 Aracının üstten görünümünü (top-down) temsil eden noktalar.
+        # x: ön-arka ekseni, y: sağ-sol ekseni
+        base_shape = [
+            (0.75, 0.08),     # Burun uç sağ
+            (0.65, 0.08),     # Burun kök sağ
+            (0.65, 0.45),     # Ön kanat sağ ön
+            (0.55, 0.45),     # Ön kanat sağ arka
+            (0.55, 0.12),     # Ön kanat iç bağlantı
+            (0.42, 0.12),     #
+            (0.42, 0.48),     # Sağ ön tekerlek ön
+            (0.20, 0.48),     # Sağ ön tekerlek arka
+            (0.20, 0.18),     # Sidepod ön hava girişi sağ
+            (0.00, 0.35),     # Sidepod genişleme bölgesi sağ
+            (-0.25, 0.28),    # Sidepod arka daralma sağ
+            (-0.25, 0.50),    # Sağ arka tekerlek ön
+            (-0.52, 0.50),    # Sağ arka tekerlek arka
+            (-0.52, 0.15),    # Arka bağlantı sağ
+            (-0.62, 0.30),    # Arka kanat sağ ön
+            (-0.70, 0.30),    # Arka kanat sağ arka
+            (-0.70, -0.30),   # Arka kanat sol arka
+            (-0.62, -0.30),   # Arka kanat sol ön
+            (-0.52, -0.15),   # Arka bağlantı sol
+            (-0.52, -0.50),   # Sol arka teker arka
+            (-0.25, -0.50),   # Sol arka teker ön
+            (-0.25, -0.28),   # Sidepod arka daralma sol
+            (0.00, -0.35),    # Sidepod genişleme bölgesi sol
+            (0.20, -0.18),    # Sidepod ön hava girişi sol
+            (0.20, -0.48),    # Sol ön tekerlek arka
+            (0.42, -0.48),    # Sol ön tekerlek ön
+            (0.42, -0.12),    #
+            (0.55, -0.12),    # Ön kanat iç bağlantı
+            (0.55, -0.45),    # Ön kanat sol arka
+            (0.65, -0.45),    # Ön kanat sol ön
+            (0.65, -0.08),    # Burun kök sol
+            (0.75, -0.08),    # Burun uç sol
+        ]
         
-        corners = np.array([
-            [front_length, w],
-            [front_length, -w],
-            [-rear_length, -w],
-            [-rear_length, w]
-        ])
+        corners = np.array([[x * L, y * W] for x, y in base_shape])
         
         rot_matrix = np.array([
             [np.cos(self.theta), -np.sin(self.theta)],
