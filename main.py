@@ -15,7 +15,7 @@ from analysis import plot_analysis
 # --- Simülasyon Parametreleri ---
 DT = 0.05
 L = 2.5
-TRAJ_LIMIT = 300
+TRAJ_LIMIT = 100
 
 def create_history_dict():
     return {
@@ -99,7 +99,7 @@ class SimulationApp:
         self.track.plot_track(ax=self.ax)
         
         # Araba - geçerli başlangıç noktası (tek nokta değil)
-        v_scale = 5.0 if self.track.track_type == 'api' else 1.2  # Araç boyutunu daha gerçekçi bir orana çektik
+        v_scale = 0.5  # Araç boyutunu gerçekçi bir orana çektik
         dummy_car = Car(x=self.start_x, y=self.start_y, theta=self.start_theta, L=L)
         init_corners = dummy_car.get_corners(visual_scale=v_scale)
         self.car_poly = plt.Polygon(
@@ -116,10 +116,8 @@ class SimulationApp:
         self.ax.add_collection(self.trajectory_line)
         
         # Otonom Araç LIDAR / Sensör Görselleştirmesi
+        # Kaldırıldı: self.lidar_lines
         self.lidar_lines = []
-        for _ in range(7):  # 7 adet tarama ışını
-            line, = self.ax.plot([], [], color='orange', alpha=0.4, linewidth=1.2, linestyle='--')
-            self.lidar_lines.append(line)
         
         self.mpc_pred_line, = self.ax.plot([], [], linestyle='--', color='#33FF66', linewidth=2.5, label='MPC Öngörü')
         
@@ -268,14 +266,16 @@ class SimulationApp:
                 self.brake_max = 15.0
                 self.car_mode = 'kinematic'
         
-        self.visual_scale = 5.0 if self.track.track_type == 'api' else 1.2
+        self.visual_scale = 0.5
             
         self.history = create_history_dict()
         self.state = {'last_closest_idx': 0, 'lap_completed': False}
         self.init_anim()
 
     def on_restart_clicked(self, event):
+        self._stop_animation()
         self.reset_simulation()
+        self._start_animation()
 
     def on_zoom_clicked(self, event):
         if self.zoom_mode == 'fit':
@@ -284,8 +284,11 @@ class SimulationApp:
         else:
             self.zoom_mode = 'fit'
             self.btn_zoom.label.set_text('Zoom Modu: Fit')
+        
+        self._stop_animation()
         self._apply_zoom()
-        self.fig.canvas.draw_idle()
+        self.fig.canvas.draw()
+        self._start_animation()
 
     def _apply_zoom(self):
         if not hasattr(self, 'track_bounds'):
@@ -306,12 +309,22 @@ class SimulationApp:
             self.car_poly.set_xy(self.car.get_corners(self.visual_scale))
         self.target_marker.set_data([], [])
         self.trajectory_line.set_segments([])
-        for line in self.lidar_lines:
-            line.set_data([], [])
         self.mpc_pred_line.set_data([], [])
         self.time_text.set_text('Başlatılıyor...')
+        
+        # Grafik çizgilerini sıfırlamamak için history'den güncel veriyi yükle
+        if hasattr(self, 'history') and len(self.history['t']) > 0:
+            t_data = self.history['t']
+            self.line_cte.set_data(t_data, self.history['cte'])
+            self.line_steer.set_data(t_data, np.degrees(self.history['steer']))
+            self.line_ld.set_data(t_data, self.history['ld'])
+        else:
+            self.line_cte.set_data([], [])
+            self.line_steer.set_data([], [])
+            self.line_ld.set_data([], [])
+        
         self._apply_zoom()
-        return [self.car_poly, self.target_marker, self.trajectory_line, self.time_text, self.mpc_pred_line] + self.lidar_lines
+        return [self.car_poly, self.target_marker, self.trajectory_line, self.time_text, self.mpc_pred_line, self.line_cte, self.line_steer, self.line_ld]
 
     def update_car(self, car, controller, history, target_v, lap_completed_key, last_idx_key, path_x, path_y):
         if self.state[lap_completed_key]:
@@ -365,7 +378,13 @@ class SimulationApp:
         history['cte'].append(cte)
         history['steer'].append(delta)
         history['v'].append(v_actual)
-        history['ld'].append(controller.current_ld if hasattr(controller, 'current_ld') else 0.0)
+        
+        if isinstance(controller, MPCController):
+            ld_val = v_actual * controller.N * controller.dt
+        else:
+            ld_val = controller.current_ld if hasattr(controller, 'current_ld') else 0.0
+        history['ld'].append(ld_val)
+        
         history['g_force'].append(g_force)
         
         return target_x, target_y
@@ -412,14 +431,6 @@ class SimulationApp:
                 self.mpc_pred_line.set_data([], [])
 
             v_act_temp = self.history['v'][-1] if len(self.history['v']) > 0 else v_d
-
-            # Dinamik Lidar Sensör Işınlarını (Rays) Güncelle
-            ray_length = min(30.0, v_act_temp * 1.5 + 10.0) # Hıza göre uzağı tara
-            angles = np.linspace(-np.pi/3, np.pi/3, len(self.lidar_lines)) + self.car.theta
-            for i, angle in enumerate(angles):
-                rx = self.car.x + ray_length * np.cos(angle)
-                ry = self.car.y + ray_length * np.sin(angle)
-                self.lidar_lines[i].set_data([self.car.x, rx], [self.car.y, ry])
             
         v_act = self.history['v'][-1] if len(self.history['v']) > 0 else v_d
         g_val = self.history['g_force'][-1] if len(self.history['g_force']) > 0 else 0.0
@@ -434,9 +445,11 @@ class SimulationApp:
         
         self.time_text.set_text(status_text)
         self.frame_count += 1
+        
         self._apply_zoom()
-
-        if self.frame_count % 5 == 0 and len(self.history['t']) > 0:
+        
+        # Grafikleri her karede güncelle ve eksen limitlerini anlık olarak ayarla
+        if len(self.history['t']) > 0:
             t_data = self.history['t']
             self.line_cte.set_data(t_data, self.history['cte'])
             self.line_steer.set_data(t_data, np.degrees(self.history['steer']))
@@ -446,7 +459,7 @@ class SimulationApp:
                 ax.relim()
                 ax.autoscale_view()
         
-        return [self.car_poly, self.target_marker, self.trajectory_line, self.time_text, self.mpc_pred_line] + self.lidar_lines
+        return [self.car_poly, self.target_marker, self.trajectory_line, self.time_text, self.mpc_pred_line, self.line_cte, self.line_steer, self.line_ld]
 
 if __name__ == '__main__':
     print("Simülasyon UI Modunda başlatılıyor...")
