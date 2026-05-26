@@ -104,10 +104,10 @@ class MPCController:
         self.max_steer = max_steer
         
         # Ağırlık Katsayıları (Cost weights)
-        self.w_lat = 15.0    # Yanal hata ağırlığı (Crosstrack Error)
-        self.w_head = 3.0    # Yönelim hatası ağırlığı (Heading Error)
-        self.w_steer = 0.5   # Direksiyon açısı büyüklüğü cezası
-        self.w_rate = 12.0   # Direksiyon değişim hızı cezası (Osilasyonu/zikzakları engellemek için yüksek tutuldu)
+        self.w_lat = 25.0   # Yanal hata ağırlığı (Crosstrack Error) - Daha yumuşak
+        self.w_head = 5.0    # Yönelim hatası ağırlığı (Heading Error)
+        self.w_steer = 2.0   # Direksiyon açısı büyüklüğü cezası
+        self.w_rate = 20.0   # Direksiyon değişim hızı cezası
         
         # Son uygulanan direksiyon açısı (değişim hızını hesaplamak için)
         self.last_delta = 0.0
@@ -241,12 +241,11 @@ class MPCController:
         # Direksiyon sınırları
         bounds = [(-self.max_steer, self.max_steer) for _ in range(self.N)]
         
-        # Hızla ölçeklenen dinamik ağırlıklar (Steering sensitivity scales quadratically with speed v!)
-        v_scaled = max(5.0, v)
-        w_lat = 1.0
-        w_head = 15.0
-        w_steer = 1.5 * (v_scaled / 10.0)**2
-        w_rate = 12.0 * (v_scaled / 10.0)**2
+        # Ağırlıklar sabit tutulur, çünkü yanal hatayı tolere edemeyiz
+        w_lat = self.w_lat
+        w_head = self.w_head
+        w_steer = self.w_steer
+        w_rate = self.w_rate
         
         # Optimizasyon problemini çöz (L-BFGS-B hızlıdır)
         res = minimize(
