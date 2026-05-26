@@ -49,8 +49,9 @@ class TrackOptimizer:
         alpha0 = np.zeros(self.n)
         
         # Sınır kısıtlamaları: alpha değeri pist genişliğinin dışına çıkamaz.
-        # Güvenlik payı bırakıyoruz
-        margin = max(0.1, (self.width / 2.0) - 1.0)
+        # Aracın kendi genişliği de olduğu için pistin tam kenarına kadar gidemeyiz.
+        # Pist yarı genişliği - araç yarı genişliği (yaklaşık 1.0m) - güvenlik payı (0.2m)
+        margin = max(0.1, (self.width / 2.0) - 1.2)
         bounds = [(-margin, margin) for _ in range(self.n)]
         
         # Optimizasyon (L-BFGS-B algoritması hızlıdır ve sınır kısıtlamalarını destekler)
@@ -60,7 +61,7 @@ class TrackOptimizer:
             alpha0, 
             method='L-BFGS-B', 
             bounds=bounds,
-            options={'ftol': 1e-5, 'disp': False}
+            options={'ftol': 1e-4, 'disp': False} # Çok hassas değil, hızlı olsun
         )
         
         alpha_opt = result.x
@@ -74,32 +75,38 @@ class TrackOptimizer:
 
     def _objective_curvature(self, alpha):
         """
-        Amaç Fonksiyonu (Objective Function): Yolun uzunluğu (Length) + Eğriliği (Curvature).
+        Amaç Fonksiyonu (Objective Function): İkinci türevlerin karesi toplamı (Curvature).
+        Bunu minimize etmek demek, yolun virajlarını en düz (smooth) hale getirmek demektir.
         """
         x = self.cx + alpha * self.nx
         y = self.cy + alpha * self.ny
         
-        # Vektörize edilmiş birinci türev (Uzunluk)
-        dx = np.roll(x, -1) - x
-        dy = np.roll(y, -1) - y
-        length_cost = np.sum(dx**2 + dy**2) * 50.0
-        
-        # Vektörize edilmiş ikinci türev (Eğrilik)
+        # Vektörize edilmiş ikinci türev (Fark denklemi: x[i-1] - 2x[i] + x[i+1])
+        # Kapalı döngü (closed loop) olduğu için np.roll kullanıyoruz
         ddx = np.roll(x, -1) - 2 * x + np.roll(x, 1)
         ddy = np.roll(y, -1) - 2 * y + np.roll(y, 1)
-        curvature_cost = np.sum(ddx**2 + ddy**2) * 50000.0
+        
+        # İkinci türevlerin (ivme/eğrilik potansiyeli) karesel toplamı
+        # Erken sonlanmayı önlemek ve optimizer'ın duyarlılığını artırmak için 1e5 ile ölçekliyoruz
+        curvature_cost = np.sum(ddx**2 + ddy**2) * 100000.0
         
         # Engel Cezası (Obstacle Penalty)
         obstacle_cost = 0.0
         if self.obstacles:
             for obs in self.obstacles:
+                # Her nokta ile engel arasındaki mesafe
                 dist_sq = (x - obs['x'])**2 + (y - obs['y'])**2
                 dist = np.sqrt(dist_sq)
+                
+                # Güvenlik mesafesi (engel yarıçapı + araç yarı genişliği (0.8m) + güvenlik marjı (0.2m) = radius + 1.0m)
                 safe_dist = obs['radius'] + 1.0
+                
+                # Eğer yol engele güvenlik mesafesinden yakınsa yüksek ceza ver
                 violation = np.maximum(0, safe_dist - dist)
+                # Engel cezasını da eğrilik cezası ile dengeli olacak şekilde 5e5 ile ölçekliyoruz
                 obstacle_cost += np.sum(violation**3) * 500000.0
                 
-        return length_cost + curvature_cost + obstacle_cost
+        return curvature_cost + obstacle_cost
         
     def generate_velocity_profile(self, opt_x, opt_y, a_max, brake_max):
         """
