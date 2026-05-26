@@ -214,9 +214,11 @@ class MPCController:
         sub_y = np.array(sub_y)
         
         # 2. Olası osilasyonları, kontrolcü-araç dinamik gecikmesini engellemek için hızla değişen dinamik look-ahead
-        look_ahead = max(1.5, 0.08 * v)
+        look_ahead = max(2.5, 0.15 * v) # Biraz daha ileri baksın ama yoldan çıkmasın
         
         # 3. Ufuktaki fiziksel hedef mesafeleri (Gecikme telafisi eklenmiş olarak)
+        # BİRİNCİ KURAL: Tahmin aralığı (step_dist) KESİNLİKLE (v * self.dt) olmak ZORUNDADIR!
+        # Aksi takdirde kinematik modelin fiziksel hareketiyle hedefin hareketi uyuşmaz, araç yoldan çıkar!
         target_dists = np.arange(self.N + 1) * (v * self.dt) + look_ahead
         
         # 4. numpy.interp ile tam fiziksel koordinatları enterpole et
@@ -241,12 +243,14 @@ class MPCController:
         # Direksiyon sınırları
         bounds = [(-self.max_steer, self.max_steer) for _ in range(self.N)]
         
-        # Hızla ölçeklenen dinamik ağırlıklar (Steering sensitivity scales quadratically with speed v!)
-        v_scaled = max(5.0, v)
-        w_lat = 1.0
-        w_head = 15.0
-        w_steer = 1.5 * (v_scaled / 10.0)**2
-        w_rate = 12.0 * (v_scaled / 10.0)**2
+        # Hız ile ölçeklenmiş hata ağırlıkları (Dinamik tuning)
+        v_scaled = max(v, 5.0)
+        # BİRİNCİ KURAL: Yanal hata (Crosstrack Error) cezası çok yüksek olmalıdır!
+        # Aksi takdirde araba engelin etrafından dolanan yolu takip etmez, kestirmeden (engelin üstünden) geçer.
+        w_lat = 25.0
+        w_head = 5.0
+        w_steer = 0.5 * (v_scaled / 10.0)**2
+        w_rate = 5.0 * (v_scaled / 10.0)**2
         
         # Optimizasyon problemini çöz (L-BFGS-B hızlıdır)
         res = minimize(

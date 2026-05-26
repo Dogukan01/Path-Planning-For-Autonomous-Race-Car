@@ -203,9 +203,29 @@ class Track:
         ve hız profilini hesaplar.
         """
         optimizer = TrackOptimizer(self.cx, self.cy, self.track_width, max_velocity=max_v, mu=mu, obstacles=self.obstacles)
-        self.opt_x, self.opt_y = optimizer.optimize_racing_line()
-        self.opt_v = optimizer.generate_velocity_profile(self.opt_x, self.opt_y, a_max, brake_max)
-        print("Hız profili oluşturuldu!")
+        opt_x, opt_y = optimizer.optimize_racing_line()
+        opt_v = optimizer.generate_velocity_profile(opt_x, opt_y, a_max, brake_max)
+        
+        # Poligonal/köşeli görünümü kaldırmak için scipy.interpolate.splprep ile noktaları sıklaştıralım (upsample)
+        from scipy.interpolate import splprep, splev
+        from config import UPSAMPLE_POINTS
+        
+        # Spline'ın kapalı bir döngü (closed loop) oluşturması için ilk noktayı sona ekleyelim
+        opt_x_c = np.append(opt_x, opt_x[0])
+        opt_y_c = np.append(opt_y, opt_y[0])
+        opt_v_c = np.append(opt_v, opt_v[0])
+        
+        # Spline (s=0 ile tam noktalardan geçen pürüzsüz eğri)
+        tck, u = splprep([opt_x_c, opt_y_c, opt_v_c], s=0, per=True)
+        u_new = np.linspace(0, 1, UPSAMPLE_POINTS)
+        x_new, y_new, v_new = splev(u_new, tck)
+        
+        # Son eklenen kopya noktayı çıkar (döngü tamam)
+        self.opt_x = x_new[:-1]
+        self.opt_y = y_new[:-1]
+        self.opt_v = v_new[:-1]
+        
+        print("Hız profili ve pürüzsüz yarış çizgisi oluşturuldu!")
 
     def plot_track(self, ax=None, show_optimal=True):
         """

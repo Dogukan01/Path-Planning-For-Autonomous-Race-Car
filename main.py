@@ -17,7 +17,7 @@ class SimulationApp:
         self.fig.canvas.manager.set_window_title('Otonom Yarış Aracı Simülasyonu')
 
         # 2. Pist ve Motor Başlat
-        initial_track_name = 'Monza (F1)'
+        initial_track_name = 'Fıstık (Varsayılan)'
         t_type, t_name = TRACK_MAPPING[initial_track_name]
         self.track = Track(track_type=t_type, track_name=t_name)
         

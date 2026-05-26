@@ -5,7 +5,7 @@ Tüm sabitler, pist parametreleri ve kontrolcü preset'leri burada tanımlanır.
 import numpy as np
 
 # --- Simülasyon Sabitleri ---
-DT = 0.025          # Zaman adımı [s] (Eskiden 0.05'ti, daha pürüzsüz rota için küçültüldü)
+DT = 0.05          # Zaman adımı [s] (Gerçek zamanlı akıcılık için orijinal değere döndürüldü)
 L = 2.5             # Dingil mesafesi (Wheelbase) [m]
 TRAJ_LIMIT = 200    # Yörünge izi için saklanan maksimum nokta sayısı (Daha yüksek çözünürlük için artırıldı)
 
