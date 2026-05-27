@@ -149,24 +149,43 @@ class Track:
         self.obstacles.append({'x': x, 'y': y, 'radius': radius})
 
     def generate_random_obstacles(self, count=3, radius=1.0):
-        """Pist üzerinde başlangıç noktasından uzak, pist sınırları içinde rastgele yanal kaymış engeller üretir."""
+        """
+        Pist üzerinde başlangıç noktasından uzak, pist sınırları içinde rastgele yanal kaymış engeller üretir.
+        Engel sayısı ve yarıçapı pist uzunluğuna ve genişliğine göre ölçeklenir.
+        """
         self.obstacles = []
         num_pts = len(self.cx)
         if num_pts < 120:
             return
-            
-        # Başlangıç noktasından (0) ve bitişten uzak durmak için [50, num_pts-50] aralığını seçiyoruz
-        # Engellerin birbirine çok yakın olmaması için seçilen indekslerin farkı en az 80 olmalıdır
-        used_indices = []
         
+        # Pist çevre uzunluğunu hesapla (kümülatif yay uzunluğu)
+        dx = np.diff(np.append(self.cx, self.cx[0]))
+        dy = np.diff(np.append(self.cy, self.cy[0]))
+        track_perimeter = np.sum(np.hypot(dx, dy))
+        
+        # Engel sayısını pist uzunluğuna göre ölçekle (her ~300m'ye 1 engel, [3, 15] arasında)
+        scaled_count = max(3, min(15, int(track_perimeter / 300.0) + count))
+        
+        # Engel yarıçapını pist genişliğine göre ölçekle (genişliğin %15'i, [0.8, 4.0] arası)
+        scaled_radius = max(0.8, min(4.0, self.track_width * 0.15))
+        # Dış parametre olarak gelen radius da hesaba katılır (ikisinin ortalaması)
+        final_radius = (scaled_radius + radius) / 2.0
+        
+        # Minimum engeller arası indeks mesafesi — pist boyutuna oranla
+        min_spacing = max(40, num_pts // (scaled_count + 2))
+        
+        # Başlangıç noktasından (0) ve bitişten uzak durmak için güvenli alan
+        safe_margin = max(50, num_pts // 10)
+        
+        used_indices = []
         attempts = 0
-        while len(self.obstacles) < count and attempts < 150:
-            idx = np.random.randint(50, num_pts - 50)
+        while len(self.obstacles) < scaled_count and attempts < 300:
+            idx = np.random.randint(safe_margin, num_pts - safe_margin)
             
             # Diğer engellere olan uzaklığı kontrol et (indeks bazında)
             too_close = False
             for u_idx in used_indices:
-                if abs(idx - u_idx) < 80: # 80 adım uzaklık
+                if abs(idx - u_idx) < min_spacing:
                     too_close = True
                     break
                     
@@ -174,18 +193,18 @@ class Track:
                 # Normal dik vektörünü hesapla (Yanal yön için)
                 prev_idx = (idx - 1) % num_pts
                 next_idx = (idx + 1) % num_pts
-                dx = self.cx[next_idx] - self.cx[prev_idx]
-                dy = self.cy[next_idx] - self.cy[prev_idx]
-                length = np.hypot(dx, dy)
+                dx_t = self.cx[next_idx] - self.cx[prev_idx]
+                dy_t = self.cy[next_idx] - self.cy[prev_idx]
+                length = np.hypot(dx_t, dy_t)
                 if length == 0:
                     nx, ny = 0.0, 1.0
                 else:
-                    nx = -dy / length
-                    ny = dx / length
+                    nx = -dy_t / length
+                    ny = dx_t / length
                 
                 # Rastgele yanal kaydırma (lateral offset)
                 # Engelin pist dışına taşmaması için sınır: (genişlik / 2) - radius - güvenlik payı (0.3m)
-                max_offset = max(0.1, (self.track_width / 2.0) - radius - 0.3)
+                max_offset = max(0.1, (self.track_width / 2.0) - final_radius - 0.3)
                 s = np.random.uniform(-1.0, 1.0)
                 offset = s * max_offset
                 
@@ -193,7 +212,7 @@ class Track:
                 obs_x = self.cx[idx] + offset * nx
                 obs_y = self.cy[idx] + offset * ny
                 
-                self.add_obstacle(obs_x, obs_y, radius)
+                self.add_obstacle(obs_x, obs_y, final_radius)
                 used_indices.append(idx)
                 
             attempts += 1
@@ -264,14 +283,28 @@ class Track:
             ax.plot(self.opt_x, self.opt_y, '-', color='#FF3366', linewidth=2,
                     alpha=0.85, label='Optimal Racing Line')
         
-        # Engelleri çiz (Fiziksel daire ve her ölçekte görünür olması için sabit boyutlu nokta işareti)
+        # Engelleri çiz (Fiziksel daire + pist boyutuna ölçekli işaretçi)
+        self.obstacle_markers = []  # Follow modunda gizlenecek marker referansları
+        
+        # Pist boyutuna göre marker ölçeği hesapla
+        all_x_e = np.concatenate([self.ix, self.ox])
+        all_y_e = np.concatenate([self.iy, self.oy])
+        track_extent = max(np.ptp(all_x_e), np.ptp(all_y_e)) if len(all_x_e) > 0 else 100.0
+        
         for i, obs in enumerate(self.obstacles):
-            # Fiziksel boyut dairesi
-            circle = plt.Circle((obs['x'], obs['y']), obs['radius'], color='red', alpha=0.4)
+            # Fiziksel boyut dairesi (gerçek engel alanı)
+            circle = plt.Circle((obs['x'], obs['y']), obs['radius'], 
+                              color='red', alpha=0.5, zorder=5)
             ax.add_patch(circle)
-            # Uzaktan bile görünmesini sağlayan sabit boyutlu işaretçi (markersize)
-            ax.plot(obs['x'], obs['y'], marker='o', color='red', markersize=8, alpha=0.8,
+            
+            # Uzaktan bile görünmesini sağlayan sabit boyutlu işaretçi (pist boyutuna ölçekli)
+            # Küçük pist (~100m): ms=8, büyük pist (~5000m): ms=16
+            ms = max(8, min(18, 6 + track_extent / 500.0))
+            marker_artist, = ax.plot(obs['x'], obs['y'], marker='o', color='red', 
+                    markersize=ms, alpha=0.7, markeredgewidth=1.5, markerfacecolor='none',
+                    markeredgecolor='red', zorder=6,
                     label='Engel (Obstacle)' if i == 0 else "")
+            self.obstacle_markers.append(marker_artist)
         
         # Gerçekçi oranlar için eksenleri eşitliyoruz
         ax.set_aspect('equal')

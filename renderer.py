@@ -143,8 +143,8 @@ class Renderer:
         """Analiz grafik eksenlerini ve çizgilerini oluşturur."""
         # 1. Hız: Gerçek vs Optimal
         self.ax_vel.clear()
-        self.line_vel_actual, = self.ax_vel.plot([], [], '#00FF88', linewidth=2, label='Gerçek Hız')
-        self.line_vel_optimal, = self.ax_vel.plot([], [], '#FF6644', linewidth=1.5, alpha=0.7, linestyle='--', label='Optimal Hız')
+        self.line_vel_actual, = self.ax_vel.plot([], [], '#00D4FF', linewidth=2.5, label='Gerçek Hız')
+        self.line_vel_optimal, = self.ax_vel.plot([], [], '#FF8800', linewidth=2, alpha=0.85, linestyle='--', label='Optimal Hız')
         self.ax_vel.set_title('Hız Profili: Gerçek vs Optimal')
         self.ax_vel.set_ylabel('Hız [m/s]')
         self.ax_vel.legend(loc='upper right', fontsize=8)
@@ -328,6 +328,11 @@ class Renderer:
         else:
             self.pulse_ring.set_data([], [])
             self.pulse_ring.set_alpha(0.0)
+
+        # Engel marker halkalarını follow modunda gizle (yakından zaten daire görünüyor)
+        if hasattr(track, 'obstacle_markers'):
+            for m in track.obstacle_markers:
+                m.set_visible(self.zoom_mode == 'fit')
 
         # Hedef işaretçisi
         # (target_x, target_y) bilgisi engine.step()'ten döner, 
