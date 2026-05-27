@@ -111,7 +111,12 @@ class Car:
             self.r = (v / self.L) * np.tan(delta)
         else:
             # Dinamik Model (Linear Tire Model)
-            self.v_x = v # İleri yönlü hızın hedef hıza eşit kontrol edildiğini varsayıyoruz
+            # NOT: Boylamsal hız (v_x) burada doğrudan hedef hıza atanmaktadır.
+            # Tam fiziksel tutarlılık için v_x'in de diferansiyel olarak güncellenmesi
+            # (lastik sürtünme dairesi ve boylamsal kuvvet dengesi ile) gerekir.
+            # Mevcut yaklaşım "yarı-dinamik" bir model oluşturur — yanal dinamikler
+            # gerçekçi, ancak boylamsal hız kontrolü kinematik gibi davranır.
+            self.v_x = v
             
             # Kayma açıları (Slip angles)
             alpha_f = delta - np.arctan2(self.v_y + self.lf * self.r, self.v_x)

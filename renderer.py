@@ -25,9 +25,9 @@ class Renderer:
 
         # --- Eksenler ---
         self.ax = fig.add_axes([0.03, 0.20, 0.62, 0.75])
-        self.ax_cte = fig.add_axes([0.72, 0.70, 0.25, 0.20])
-        self.ax_steer = fig.add_axes([0.72, 0.40, 0.25, 0.20])
-        self.ax_ld = fig.add_axes([0.72, 0.10, 0.25, 0.20])
+        self.ax_vel = fig.add_axes([0.72, 0.70, 0.25, 0.20])
+        self.ax_cte = fig.add_axes([0.72, 0.40, 0.25, 0.20])
+        self.ax_gforce = fig.add_axes([0.72, 0.10, 0.25, 0.20])
 
         # --- Kamera durumu ---
         self.zoom_mode = 'fit'   # 'fit' veya 'follow'
@@ -45,9 +45,10 @@ class Renderer:
         self.mpc_pred_line = None
         self.time_text = None
         self.pulse_ring = None
+        self.line_vel_actual = None
+        self.line_vel_optimal = None
         self.line_cte = None
-        self.line_steer = None
-        self.line_ld = None
+        self.line_gforce = None
 
         # --- Optimizasyon flag'leri ---
         self._clim_set = False
@@ -140,28 +141,32 @@ class Renderer:
 
     def _setup_analysis_axes(self):
         """Analiz grafik eksenlerini ve çizgilerini oluşturur."""
+        # 1. Hız: Gerçek vs Optimal
+        self.ax_vel.clear()
+        self.line_vel_actual, = self.ax_vel.plot([], [], '#00FF88', linewidth=2, label='Gerçek Hız')
+        self.line_vel_optimal, = self.ax_vel.plot([], [], '#FF6644', linewidth=1.5, alpha=0.7, linestyle='--', label='Optimal Hız')
+        self.ax_vel.set_title('Hız Profili: Gerçek vs Optimal')
+        self.ax_vel.set_ylabel('Hız [m/s]')
+        self.ax_vel.legend(loc='upper right', fontsize=8)
+        self.ax_vel.grid(True, linestyle=':', alpha=0.8)
+        self.ax_vel.tick_params(labelbottom=False)
+
+        # 2. CTE (Yörüngeden Sapma Hatası)
         self.ax_cte.clear()
-        self.line_cte, = self.ax_cte.plot([], [], 'lime', linewidth=2)
+        self.line_cte, = self.ax_cte.plot([], [], '#00FF88', linewidth=2)
         self.ax_cte.axhline(0, color='k', linestyle='--', alpha=0.5)
         self.ax_cte.set_title('Yörüngeden Sapma Hatası (CTE)')
         self.ax_cte.set_ylabel('Hata [m]')
         self.ax_cte.grid(True, linestyle=':', alpha=0.8)
         self.ax_cte.tick_params(labelbottom=False)
 
-        self.ax_steer.clear()
-        self.line_steer, = self.ax_steer.plot([], [], 'lime', linewidth=2)
-        self.ax_steer.axhline(0, color='k', linestyle='--', alpha=0.5)
-        self.ax_steer.set_title('Direksiyon Açısı')
-        self.ax_steer.set_ylabel('Açı [Derece]')
-        self.ax_steer.grid(True, linestyle=':', alpha=0.8)
-        self.ax_steer.tick_params(labelbottom=False)
-
-        self.ax_ld.clear()
-        self.line_ld, = self.ax_ld.plot([], [], 'lime', linewidth=2)
-        self.ax_ld.set_title('İleri Bakma Mesafesi (Ld)')
-        self.ax_ld.set_xlabel('Zaman [s]')
-        self.ax_ld.set_ylabel('Ld [m]')
-        self.ax_ld.grid(True, linestyle=':', alpha=0.8)
+        # 3. G-Kuvveti
+        self.ax_gforce.clear()
+        self.line_gforce, = self.ax_gforce.plot([], [], '#FF3366', linewidth=2)
+        self.ax_gforce.set_title('G-Kuvveti (Toplam)')
+        self.ax_gforce.set_xlabel('Zaman [s]')
+        self.ax_gforce.set_ylabel('G')
+        self.ax_gforce.grid(True, linestyle=':', alpha=0.8)
 
     def _calculate_track_bounds(self, track):
         """Pist sınır kutusunu hesaplar (fit modu için)."""
@@ -235,19 +240,20 @@ class Renderer:
         self.show_charts = not self.show_charts
         if self.show_charts:
             self.ax.set_position([0.03, 0.20, 0.62, 0.75])
+            self.ax_vel.set_visible(True)
             self.ax_cte.set_visible(True)
-            self.ax_steer.set_visible(True)
-            self.ax_ld.set_visible(True)
+            self.ax_gforce.set_visible(True)
         else:
             self.ax.set_position([0.03, 0.20, 0.94, 0.75])
+            self.ax_vel.set_visible(False)
             self.ax_cte.set_visible(False)
-            self.ax_steer.set_visible(False)
-            self.ax_ld.set_visible(False)
+            self.ax_gforce.set_visible(False)
             
         if self.line_cte is not None:
+            self.line_vel_actual.set_visible(self.show_charts)
+            self.line_vel_optimal.set_visible(self.show_charts)
             self.line_cte.set_visible(self.show_charts)
-            self.line_steer.set_visible(self.show_charts)
-            self.line_ld.set_visible(self.show_charts)
+            self.line_gforce.set_visible(self.show_charts)
             
         return self.show_charts
 
@@ -260,7 +266,8 @@ class Renderer:
         return [
             self.car_poly, self.target_marker, self.trajectory_line,
             self.time_text, self.mpc_pred_line, self.pulse_ring,
-            self.line_cte, self.line_steer, self.line_ld,
+            self.line_vel_actual, self.line_vel_optimal,
+            self.line_cte, self.line_gforce,
         ]
 
     def init_anim(self, car, history):
@@ -276,13 +283,15 @@ class Renderer:
         # Mevcut history verisi varsa grafikleri güncelle
         if history and len(history['t']) > 0:
             t_data = history['t']
+            self.line_vel_actual.set_data(t_data, history['v'])
+            self.line_vel_optimal.set_data(t_data, history['opt_v'])
             self.line_cte.set_data(t_data, history['cte'])
-            self.line_steer.set_data(t_data, np.degrees(history['steer']))
-            self.line_ld.set_data(t_data, history['ld'])
+            self.line_gforce.set_data(t_data, history['g_force'])
         else:
+            self.line_vel_actual.set_data([], [])
+            self.line_vel_optimal.set_data([], [])
             self.line_cte.set_data([], [])
-            self.line_steer.set_data([], [])
-            self.line_ld.set_data([], [])
+            self.line_gforce.set_data([], [])
 
         self.apply_zoom(car.x if car else None, car.y if car else None)
         return self.get_animated_artists()
@@ -396,11 +405,12 @@ class Renderer:
             return
 
         t_data = history['t']
+        self.line_vel_actual.set_data(t_data, history['v'])
+        self.line_vel_optimal.set_data(t_data, history['opt_v'])
         self.line_cte.set_data(t_data, history['cte'])
-        self.line_steer.set_data(t_data, np.degrees(history['steer']))
-        self.line_ld.set_data(t_data, history['ld'])
+        self.line_gforce.set_data(t_data, history['g_force'])
 
         if frame_count % RELIM_INTERVAL == 0:
-            for ax in [self.ax_cte, self.ax_steer, self.ax_ld]:
+            for ax in [self.ax_vel, self.ax_cte, self.ax_gforce]:
                 ax.relim()
                 ax.autoscale_view()

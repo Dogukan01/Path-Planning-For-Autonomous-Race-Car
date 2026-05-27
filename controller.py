@@ -126,12 +126,8 @@ class MPCController:
         return np.argmin(dx**2 + dy**2)
 
     def _normalize_angle(self, angle, target):
-        """Açı farklarının sürekliliğini korumak için normalleştirir."""
-        while angle - target > np.pi:
-            angle -= 2 * np.pi
-        while angle - target < -np.pi:
-            angle += 2 * np.pi
-        return angle
+        """Açı farklarının sürekliliğini korumak için normalleştirir (modüler aritmetik)."""
+        return target + ((angle - target + np.pi) % (2 * np.pi) - np.pi)
 
     def _mpc_cost(self, u, x0, y0, theta0, v, ref_x, ref_y, ref_theta, w_lat, w_head, w_steer, w_rate):
         """
@@ -147,10 +143,10 @@ class MPCController:
         for k in range(self.N):
             delta = u[k]
             
-            # Kinematik Araç Modeli Tahmin Denklemleri
+            # Kinematik Araç Modeli Tahmin Denklemleri (tan(delta) ile — car.py ile tutarlı)
             x += v * np.cos(theta) * self.dt
             y += v * np.sin(theta) * self.dt
-            theta += (v / self.L) * delta * self.dt
+            theta += (v / self.L) * np.tan(delta) * self.dt
             
             # 1. Yanal Hata Cezası (Crosstrack Error)
             cost += w_lat * ((x - ref_x[k+1])**2 + (y - ref_y[k+1])**2)
@@ -279,7 +275,7 @@ class MPCController:
             d = opt_u[k]
             px += v * np.cos(ptheta) * self.dt
             py += v * np.sin(ptheta) * self.dt
-            ptheta += (v / self.L) * d * self.dt
+            ptheta += (v / self.L) * np.tan(d) * self.dt
             pred_x[k+1] = px
             pred_y[k+1] = py
             

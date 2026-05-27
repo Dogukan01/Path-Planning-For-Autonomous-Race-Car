@@ -49,7 +49,7 @@ class UIManager:
         ax_ctrl_radio = plt.axes([0.62, 0.02, 0.15, 0.11])
         ax_ctrl_radio.set_title('Kontrolcü Seçimi', fontweight='bold')
         self.radio_ctrl = RadioButtons(
-            ax_ctrl_radio, ('MPC (Phase 3)', 'Pure Pursuit')
+            ax_ctrl_radio, ('MPC', 'Pure Pursuit')
         )
 
     def connect_callbacks(self, on_restart, on_zoom, on_toggle, on_track_changed, on_controller_changed):

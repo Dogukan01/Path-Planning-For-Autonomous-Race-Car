@@ -4,16 +4,17 @@ import urllib.request
 import csv
 import io
 from optimizer import TrackOptimizer
+from config import TRACK_WIDTH
 
 class Track:
     """
     Yarış pistini modelleyen sınıf. 
     Farklı türlerde (fıstık, yuvarlak, gerçek F1 pistleri) pist üretebilir.
     """
-    def __init__(self, track_type='peanut', track_name='', track_width=6.0, num_points=500):
+    def __init__(self, track_type='peanut', track_name='', track_width=None, num_points=500):
         self.track_type = track_type
         self.track_name = track_name
-        self.track_width = track_width
+        self.track_width = track_width if track_width is not None else TRACK_WIDTH
         self.num_points = num_points
         self.cx = []  # Centerline x
         self.cy = []  # Centerline y
@@ -213,17 +214,32 @@ class Track:
         # Spline'ın kapalı bir döngü (closed loop) oluşturması için ilk noktayı sona ekleyelim
         opt_x_c = np.append(opt_x, opt_x[0])
         opt_y_c = np.append(opt_y, opt_y[0])
-        opt_v_c = np.append(opt_v, opt_v[0])
         
-        # Spline (s=0 ile tam noktalardan geçen pürüzsüz eğri)
-        tck, u = splprep([opt_x_c, opt_y_c, opt_v_c], s=0, per=True)
+        # Spline SADECE x,y koordinatları için (s=0 ile tam noktalardan geçen pürüzsüz eğri)
+        # Hız profili spline'a dahil EDİLMEZ — fiziksel frenleme/ivmelenme sınırlarını
+        # yumuşatıp ihlal etmemesi için ayrı enterpole edilir.
+        tck, u = splprep([opt_x_c, opt_y_c], s=0, per=True)
         u_new = np.linspace(0, 1, UPSAMPLE_POINTS)
-        x_new, y_new, v_new = splev(u_new, tck)
+        x_new, y_new = splev(u_new, tck)
         
         # Son eklenen kopya noktayı çıkar (döngü tamam)
         self.opt_x = x_new[:-1]
         self.opt_y = y_new[:-1]
-        self.opt_v = v_new[:-1]
+        
+        # Hız profilini kümülatif yay uzunluğu bazlı doğrusal enterpole et (np.interp)
+        # Bu yöntem fiziksel frenleme/ivmelenme geçişlerini korur.
+        n_orig = len(opt_x)
+        dx_orig = np.diff(np.append(opt_x, opt_x[0]))
+        dy_orig = np.diff(np.append(opt_y, opt_y[0]))
+        s_orig = np.concatenate([[0], np.cumsum(np.hypot(dx_orig, dy_orig))])
+        
+        dx_new = np.diff(np.append(self.opt_x, self.opt_x[0]))
+        dy_new = np.diff(np.append(self.opt_y, self.opt_y[0]))
+        s_new = np.concatenate([[0], np.cumsum(np.hypot(dx_new, dy_new))])
+        
+        # Orijinal hız profilini kapalı döngü olarak genişlet
+        v_orig_closed = np.append(opt_v, opt_v[0])
+        self.opt_v = np.interp(s_new[:-1], s_orig, v_orig_closed)
         
         print("Hız profili ve pürüzsüz yarış çizgisi oluşturuldu!")
 

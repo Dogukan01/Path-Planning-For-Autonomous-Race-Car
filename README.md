@@ -53,7 +53,7 @@ python main.py
 1. **Pist Seçimi:** Sağ üstteki menüden dilediğiniz pisti seçebilirsiniz. Gerçek F1 pistleri seçildiğinde API'den otomatik indirme ve yerel önbelleğe kaydetme işlemleri terminalde raporlanır.
 2. **Kontrolcü Seçimi:** Sağ alttaki menüden anlık olarak **MPC** veya **Pure Pursuit** kontrolcüsüne geçiş yapabilirsiniz. Kontrolcü değiştiğinde araç başlangıç çizgisine sıfırlanır.
 3. **Yeniden Başlat:** Simülasyonu mevcut parametrelerle en baştan başlatır.
-4. **Analizi Göster:** Araç turu tamamladığında veya simülasyon devam ederken, o ana kadar toplanan verileri 4 farklı grafik halinde analiz etmek için bu butona tıklayabilirsiniz.
+4. **Grafikleri Gizle/Göster:** Sağ paneldeki canlı analiz grafiklerini gizleyerek pist görünümünü genişletebilir, tekrar gösterebilirsiniz.
 
 ---
 
@@ -69,7 +69,10 @@ Path-Planning-For-Autonomous-Race-Car/
 ├── controller.py           # Model Öngörülü Kontrol (MPC) ve Pure Pursuit algoritmaları
 ├── track.py                # Pist üretimi, F1 API entegrasyonu ve engel yönetimi
 ├── optimizer.py            # Minimum Eğrilik (Curvature) optimizasyonu ve Hız Profili oluşturma
-└── analysis.py             # Simülasyon sonrası performans görselleştirme aracı
+├── simulation.py           # Fizik motoru: araç hareketi, kontrolcü yönetimi ve tur tespiti
+├── renderer.py             # Render motoru: çizim, kamera yönetimi ve analiz grafikleri
+├── ui_manager.py           # UI Widget yöneticisi: butonlar ve radio button'lar
+└── analysis.py             # Simülasyon sonrası performans görselleştirme aracı (standalone)
 ```
 
 ---
@@ -102,8 +105,7 @@ $$J_{mpc} = w_{lat} \sum_{k=1}^{N} e_{y,k}^2 + w_{head} \sum_{k=1}^{N} e_{\theta
 
 ## 📈 Raporlama & Analiz Çıktıları
 
-Simülasyon tamamlandığında veya "Analizi Göster" butonuna tıklandığında açılan ekran şu 4 grafiği sunar:
-1. **Araç Hızı Grafiği:** Aracın virajlarda nasıl yavaşladığını (frenleme) ve düzlüklerde fiziksel ivmelenme limitine göre hızlandığını gösterir.
-2. **İleri Bakma Mesafesi ($L_d$):** Hıza duyarlı olarak kontrolcünün ne kadar ileriyi hedeflediğini doğrular.
-3. **Yörüngeden Sapma Hatası (Cross-Track Error):** Kontrolcünün pist merkez çizgisi veya optimal yarış çizgisine olan yanal sapma miktarını (metre cinsinden) gösterir. MPC için bu değer genellikle sıfıra çok yakındır.
-4. **Direksiyon Açısı Grafiği:** Kontrolcü tarafından tekerleklere gönderilen yönlendirme komutlarının zamanla değişimini (derece bazında) sunarak sürüşün ne kadar pürüzsüz (smooth) olduğunu doğrular.
+Simülasyon sırasında sağ panelde canlı olarak güncellenen 3 analiz grafiği sunulur:
+1. **Hız Profili: Gerçek vs Optimal:** Aracın gerçek hızını (yeşil) optimal hız profili (turuncu kesikli) ile karşılaştırır. Kontrolcünün hız profili takip performansını doğrular.
+2. **Yörüngeden Sapma Hatası (Cross-Track Error):** Kontrolcünün optimal yarış çizgisine olan yanal sapma miktarını (metre cinsinden) gösterir. MPC için bu değer genellikle sıfıra çok yakındır.
+3. **G-Kuvveti (Toplam):** Araç üzerindeki toplam ivme büyüklüğünü (boylamsal + yanal) G cinsinden gösterir. Lastik tutunma sınırlarının aşılıp aşılmadığını doğrular.
