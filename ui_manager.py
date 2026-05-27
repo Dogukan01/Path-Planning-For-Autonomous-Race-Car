@@ -19,34 +19,34 @@ class UIManager:
         self.fig = fig
 
         # --- Yeniden Başlat butonu ---
-        ax_restart = plt.axes([0.05, 0.05, 0.1, 0.05])
+        ax_restart = plt.axes([0.02, 0.02, 0.12, 0.06])
         self.btn_restart = Button(
             ax_restart, 'Yeniden Başlat',
             color='lightgoldenrodyellow', hovercolor='0.975'
         )
 
         # --- Kamera modu butonu ---
-        ax_zoom = plt.axes([0.17, 0.05, 0.12, 0.05])
+        ax_zoom = plt.axes([0.16, 0.02, 0.14, 0.06])
         self.btn_zoom = Button(
             ax_zoom, 'Kamera: Pist Tümü',
             color='lightgreen', hovercolor='0.975'
         )
 
         # --- Grafikleri Gizle/Göster butonu ---
-        ax_toggle = plt.axes([0.31, 0.05, 0.12, 0.05])
+        ax_toggle = plt.axes([0.32, 0.02, 0.12, 0.06])
         self.btn_toggle = Button(
             ax_toggle, 'Grafikleri Gizle',
             color='lightblue', hovercolor='0.975'
         )
 
         # --- Pist seçimi RadioButton ---
-        ax_radio = plt.axes([0.45, 0.02, 0.15, 0.11])
+        ax_radio = plt.axes([0.46, 0.01, 0.16, 0.11])
         ax_radio.set_title('Pist Seçimi', fontweight='bold')
         track_labels = tuple(TRACK_MAPPING.keys())
         self.radio_track = RadioButtons(ax_radio, track_labels)
 
         # --- Kontrolcü seçimi RadioButton ---
-        ax_ctrl_radio = plt.axes([0.62, 0.02, 0.15, 0.11])
+        ax_ctrl_radio = plt.axes([0.64, 0.01, 0.16, 0.11])
         ax_ctrl_radio.set_title('Kontrolcü Seçimi', fontweight='bold')
         self.radio_ctrl = RadioButtons(
             ax_ctrl_radio, ('MPC', 'Pure Pursuit')

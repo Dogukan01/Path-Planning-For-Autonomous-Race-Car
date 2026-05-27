@@ -24,10 +24,10 @@ class Renderer:
         self.fig = fig
 
         # --- Eksenler ---
-        self.ax = fig.add_axes([0.03, 0.20, 0.62, 0.75])
-        self.ax_vel = fig.add_axes([0.72, 0.70, 0.25, 0.20])
-        self.ax_cte = fig.add_axes([0.72, 0.40, 0.25, 0.20])
-        self.ax_gforce = fig.add_axes([0.72, 0.10, 0.25, 0.20])
+        self.ax = fig.add_axes([0.03, 0.15, 0.62, 0.80])
+        self.ax_vel = fig.add_axes([0.72, 0.72, 0.25, 0.18])
+        self.ax_cte = fig.add_axes([0.72, 0.44, 0.25, 0.18])
+        self.ax_gforce = fig.add_axes([0.72, 0.16, 0.25, 0.18])
 
         # --- Kamera durumu ---
         self.zoom_mode = 'fit'   # 'fit' veya 'follow'
@@ -239,12 +239,12 @@ class Renderer:
         """Analiz grafiklerini gösterir/gizler ve ana sahneyi yeniden boyutlandırır."""
         self.show_charts = not self.show_charts
         if self.show_charts:
-            self.ax.set_position([0.03, 0.20, 0.62, 0.75])
+            self.ax.set_position([0.03, 0.15, 0.62, 0.80])
             self.ax_vel.set_visible(True)
             self.ax_cte.set_visible(True)
             self.ax_gforce.set_visible(True)
         else:
-            self.ax.set_position([0.03, 0.20, 0.94, 0.75])
+            self.ax.set_position([0.03, 0.15, 0.94, 0.80])
             self.ax_vel.set_visible(False)
             self.ax_cte.set_visible(False)
             self.ax_gforce.set_visible(False)
