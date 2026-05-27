@@ -133,12 +133,16 @@ class SimulationEngine:
         # Hız rampalama (ivmelenme / frenleme limitleri)
         v_current = self.history['v'][-1] if len(self.history['v']) > 0 else target_v
 
-        if target_v > v_current:
-            v_actual = min(v_current + self.a_max * DT, target_v)
-        elif target_v < v_current:
-            v_actual = max(v_current - self.brake_max * DT, target_v)
-        else:
-            v_actual = target_v
+        # Gerçekçi gaz/fren tepkisi (P-kontrol)
+        error = target_v - v_current
+        # P-gain = 2.0 (aracın hedefe ulaşma agresifliği)
+        desired_accel = error * 2.0
+        
+        # Maksimum ivme/fren limitlerini uygula
+        desired_accel = np.clip(desired_accel, -self.brake_max, self.a_max)
+        
+        # Yeni hızı hesapla
+        v_actual = v_current + desired_accel * DT
 
         # Kontrolcü çıktısı (precomputed_closest ile tekrar hesaplama önlenir)
         closest_idx = precomputed_closest if precomputed_closest is not None else 0

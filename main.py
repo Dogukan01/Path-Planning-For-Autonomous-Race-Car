@@ -44,12 +44,15 @@ class SimulationApp:
             idx = list_tracks.index(initial_track_name)
             self.ui.radio_track.set_active(idx)
 
+        self.is_paused = False
+
         self.ui.connect_callbacks(
             on_restart=self.on_restart,
             on_zoom=self.on_zoom_toggle,
             on_toggle=self.on_charts_toggle,
             on_track_changed=self.on_track_changed,
-            on_controller_changed=self.on_controller_changed
+            on_controller_changed=self.on_controller_changed,
+            on_pause=self.on_pause_toggle
         )
         
         # 5. Animasyon Başlat (blit=False yapılarak tüm dinamik yenileme ve donma hataları önlendi)
@@ -63,6 +66,14 @@ class SimulationApp:
         return self.renderer.init_anim(self.engine.car, self.engine.history)
 
     def update(self, frame):
+        if self.is_paused:
+            # Duraklatıldıysa mevcut görsel frame'i geri döndür (ilerleme yapma)
+            return self.renderer.update_visuals(
+                self.engine.car, self.engine.history, 
+                self.engine.controller, self.engine.state, 
+                self.engine.frame_count, self.engine.track
+            )
+            
         # Fizik motorunu çalıştır
         tx, ty = self.engine.step()
         
@@ -102,6 +113,18 @@ class SimulationApp:
         # Grafikler değiştiğinde axes pozisyonları kaydığı için canvas'ı sıfırlayıp animasyonu yeniden başlatıyoruz
         self.fig.canvas.draw_idle()
         self._restart_animation()
+
+    def on_pause_toggle(self, event):
+        self.is_paused = not self.is_paused
+        if self.is_paused:
+            self.anim.event_source.stop()
+            self.ui.btn_pause.label.set_text('Devam Et')
+            self.ui.btn_pause.color = 'lightgreen'
+        else:
+            self.anim.event_source.start()
+            self.ui.btn_pause.label.set_text('Durdur')
+            self.ui.btn_pause.color = 'lightcoral'
+        self.fig.canvas.draw_idle()
 
     def on_track_changed(self, label):
         t_type, t_name = TRACK_MAPPING[label]

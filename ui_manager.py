@@ -39,20 +39,27 @@ class UIManager:
             color='lightblue', hovercolor='0.975'
         )
 
+        # --- Durdur/Başlat butonu ---
+        ax_pause = plt.axes([0.46, 0.02, 0.12, 0.06])
+        self.btn_pause = Button(
+            ax_pause, 'Durdur',
+            color='lightcoral', hovercolor='0.975'
+        )
+
         # --- Pist seçimi RadioButton ---
-        ax_radio = plt.axes([0.46, 0.01, 0.16, 0.11])
+        ax_radio = plt.axes([0.60, 0.01, 0.16, 0.11])
         ax_radio.set_title('Pist Seçimi', fontweight='bold')
         track_labels = tuple(TRACK_MAPPING.keys())
         self.radio_track = RadioButtons(ax_radio, track_labels)
 
         # --- Kontrolcü seçimi RadioButton ---
-        ax_ctrl_radio = plt.axes([0.64, 0.01, 0.16, 0.11])
+        ax_ctrl_radio = plt.axes([0.78, 0.01, 0.16, 0.11])
         ax_ctrl_radio.set_title('Kontrolcü Seçimi', fontweight='bold')
         self.radio_ctrl = RadioButtons(
             ax_ctrl_radio, ('MPC', 'Pure Pursuit')
         )
 
-    def connect_callbacks(self, on_restart, on_zoom, on_toggle, on_track_changed, on_controller_changed):
+    def connect_callbacks(self, on_restart, on_zoom, on_toggle, on_track_changed, on_controller_changed, on_pause=None):
         """
         Tüm widget callback'lerini bağlar.
         
@@ -60,12 +67,15 @@ class UIManager:
             on_restart: Yeniden başlat butonu callback'i
             on_zoom: Kamera modu butonu callback'i
             on_toggle: Grafikleri gizle/göster butonu callback'i
+            on_pause: Durdur/Başlat butonu callback'i
             on_track_changed: Pist seçimi callback'i
             on_controller_changed: Kontrolcü seçimi callback'i
         """
         self.btn_restart.on_clicked(on_restart)
         self.btn_zoom.on_clicked(on_zoom)
         self.btn_toggle.on_clicked(on_toggle)
+        if on_pause:
+            self.btn_pause.on_clicked(on_pause)
         self.radio_track.on_clicked(on_track_changed)
         self.radio_ctrl.on_clicked(on_controller_changed)
 

@@ -92,7 +92,8 @@ class TrackOptimizer:
         ddy = np.roll(y, -1) - 2 * y + np.roll(y, 1)
         
         # İkinci türevlerin (ivme/eğrilik potansiyeli) karesel toplamı
-        curvature_cost = np.sum(ddx**2 + ddy**2) * 50000.0
+        # Engelden kaçarken çok sert direksiyon kırmaması için dengeleyici ağırlık
+        curvature_cost = np.sum(ddx**2 + ddy**2) * 100000.0
         
         # Engel Cezası (Obstacle Penalty)
         obstacle_cost = 0.0
@@ -102,13 +103,16 @@ class TrackOptimizer:
                 dist_sq = (x - obs['x'])**2 + (y - obs['y'])**2
                 dist = np.sqrt(dist_sq)
                 
-                # Güvenlik mesafesi (engel yarıçapı + araç yarı genişliği (0.8m) + ekstra manevra güvenlik marjı (1.2m) = radius + 2.0m)
-                safe_dist = obs['radius'] + 2.0
+                # Güvenlik mesafesi (engel yarıçapı + araç yarı genişliği (0.8m) + ekstra güvenlik payı (0.7m))
+                # Aracın engelin hiçbir yerine (curb gibi) değmemesi için 1.5 olarak ayarlandı
+                safe_dist = obs['radius'] + 1.5
                 
-                # Eğer yol engele güvenlik mesafesinden yakınsa yüksek ceza ver
+                # Eğer yol engele güvenlik mesafesinden yakınsa ceza ver
                 violation = np.maximum(0, safe_dist - dist)
-                # Engel cezasını da eğrilik cezası ile dengeli olacak şekilde 5e5 ile ölçekliyoruz
-                obstacle_cost += np.sum(violation**3) * 500000.0
+                
+                # Karesel ceza (Quadratic Penalty). 
+                # Aracın engeli kesinlikle kesmemesi için ağırlık çok yüksek (1,000,000) tutuldu
+                obstacle_cost += np.sum(violation**2) * 1000000.0
                 
         return length_cost + curvature_cost + obstacle_cost
         
