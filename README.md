@@ -43,17 +43,27 @@ pip install numpy matplotlib scipy
 
 ## 🚀 Kullanım
 
+### 1. İnteraktif Arayüz (Matplotlib GUI)
 Simülasyon arayüzünü başlatmak için ana dizinde şu komutu çalıştırmanız yeterlidir:
 
 ```bash
 python main.py
 ```
 
-### Arayüz Kontrolleri:
+#### Arayüz Kontrolleri:
 1. **Pist Seçimi:** Sağ üstteki menüden dilediğiniz pisti seçebilirsiniz. Gerçek F1 pistleri seçildiğinde API'den otomatik indirme ve yerel önbelleğe kaydetme işlemleri terminalde raporlanır.
 2. **Kontrolcü Seçimi:** Sağ alttaki menüden anlık olarak **MPC** veya **Pure Pursuit** kontrolcüsüne geçiş yapabilirsiniz. Kontrolcü değiştiğinde araç başlangıç çizgisine sıfırlanır.
 3. **Yeniden Başlat:** Simülasyonu mevcut parametrelerle en baştan başlatır.
 4. **Grafikleri Gizle/Göster:** Sağ paneldeki canlı analiz grafiklerini gizleyerek pist görünümünü genişletebilir, tekrar gösterebilirsiniz.
+
+### 2. Arayüzsüz Toplu Deneyler ve Karşılaştırmalı Analiz
+MPC ve Pure Pursuit kontrolcülerinin farklı pistlerdeki performansını otomatik koşturmak ve karşılaştırmalı tablo/grafik üretmek için:
+
+```bash
+python run_experiments.py
+```
+Bu komut, deneyler bittiğinde otomatik olarak şu dosyayı üretecektir:
+- `comparison_results.png`: İki kontrolcünün yörünge izlerini ve performans grafiklerini yan yana sunan analiz görseli.
 
 ---
 
@@ -68,10 +78,13 @@ Path-Planning-For-Autonomous-Race-Car/
 ├── car.py                  # Kinematik Bisiklet Modeli & Dinamik Lastik Fiziği modeli
 ├── controller.py           # Model Öngörülü Kontrol (MPC) ve Pure Pursuit algoritmaları
 ├── track.py                # Pist üretimi, F1 API entegrasyonu ve engel yönetimi
-├── optimizer.py            # Minimum Eğrilik (Curvature) optimizasyonu ve Hız Profili oluşturma
+├── optimizer.py            # Minimum Eğrilik (Curvature) optimizasyonu ve Hız Profilini oluşturma
 ├── simulation.py           # Fizik motoru: araç hareketi, kontrolcü yönetimi ve tur tespiti
 ├── renderer.py             # Render motoru: çizim, kamera yönetimi ve analiz grafikleri
 ├── ui_manager.py           # UI Widget yöneticisi: butonlar ve radio button'lar
+├── run_experiments.py      # Farklı hız ve pistlerde otomatik deney koşturma script'i
+├── comparison_results.png  # Deneylerin karşılaştırmalı grafik çıktısı
+├── Simülasyon ve Modelleme Raporu.pdf # TÜBİTAK 2209-A standartlarında derlenmiş proje raporu
 └── analysis.py             # Simülasyon sonrası performans görselleştirme aracı (standalone)
 ```
 

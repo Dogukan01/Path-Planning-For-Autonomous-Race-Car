@@ -68,12 +68,14 @@ class Track:
             reader = csv.reader(io.StringIO(csv_data))
             # İlk satırı kontrol et (header olabilir)
             header = next(reader)
-            if not header[0].startswith('#') and not header[0].replace('.','',1).isdigit():
-                pass # Header ise bir şey yapma
-            elif header[0].replace('-','',1).replace('.','',1).isdigit():
-                # Sayı ise veridir, listeye ekle
-                self.cx.append(float(header[0]))
-                self.cy.append(float(header[1]))
+            if header and not header[0].startswith('#'):
+                try:
+                    # İlk satırın sayı olup olmadığını kontrol et (veri ise listeye ekle)
+                    self.cx.append(float(header[0]))
+                    self.cy.append(float(header[1]))
+                except ValueError:
+                    # Sayıya çevrilemiyorsa başlık satırıdır, yoksay
+                    pass
             
             points = []
             for row in reader:

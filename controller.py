@@ -188,14 +188,30 @@ class MPCController:
         # Bu, F1 pistleri gibi seyrek noktalı pistlerde ve yüksek hızlarda (Monza chicaneleri)
         # viraj kesme hatasını (mismatch) tamamen engeller ve 1-e-1 fiziksel uyum sağlar!
         
-        # 1. En yakın noktadan itibaren ileriye doğru yörünge adımlarının kümülatif uzunluklarını hesapla
+        # 1. Olası osilasyonları engellemek için hızla değişen dinamik look-ahead
+        look_ahead = max(2.5, 0.15 * v)
+        max_dist = self.N * (v * self.dt) + look_ahead
+
+        # Ortalama nokta mesafesini yerel olarak hesapla (sınır aşımında başa sararak)
+        dx_sample = np.diff(path_x[closest_idx : closest_idx + 10])
+        dy_sample = np.diff(path_y[closest_idx : closest_idx + 10])
+        if len(dx_sample) < 9:
+            dx_sample = np.diff(path_x[:10])
+            dy_sample = np.diff(path_y[:10])
+        ds = np.mean(np.hypot(dx_sample, dy_sample))
+        if ds < 1e-4:
+            ds = 0.1
+
+        # Tahmin ufkunun ve hızın getireceği mesafeyi kapsayacak dinamik nokta sayısı
+        search_pts = int(np.ceil(max_dist / ds)) + 20
+        search_pts = max(50, min(1000, search_pts))
+
+        # En yakın noktadan itibaren ileriye doğru yörünge adımlarının kümülatif uzunluklarını hesapla
         dists = [0.0]
         sub_x = []
         sub_y = []
         curr_idx = closest_idx
         
-        # Tahmin ufkunun ve hızın getireceği mesafeyi kapsamak için yeterli aralıkta noktayı çıkarıyoruz
-        search_pts = self.N * 3 + 50
         for _ in range(search_pts):
             sub_x.append(path_x[curr_idx])
             sub_y.append(path_y[curr_idx])
@@ -208,9 +224,6 @@ class MPCController:
         dists = np.array(dists[:-1]) # Son fazlalığı atıyoruz
         sub_x = np.array(sub_x)
         sub_y = np.array(sub_y)
-        
-        # 2. Olası osilasyonları, kontrolcü-araç dinamik gecikmesini engellemek için hızla değişen dinamik look-ahead
-        look_ahead = max(2.5, 0.15 * v) # Biraz daha ileri baksın ama yoldan çıkmasın
         
         # 3. Ufuktaki fiziksel hedef mesafeleri (Gecikme telafisi eklenmiş olarak)
         # BİRİNCİ KURAL: Tahmin aralığı (step_dist) KESİNLİKLE (v * self.dt) olmak ZORUNDADIR!
